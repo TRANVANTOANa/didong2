@@ -20,21 +20,21 @@ export default function TabLayout() {
         },
         tabBarLabelStyle: {
           fontSize: 0,
-          display: 'none',
+          display: "none",
         },
         tabBarIconStyle: {
           marginTop: 0,
         },
         headerShown: false,
+        tabBarShowLabel: false,
       }}
     >
-      
       {/* Home */}
       <Tabs.Screen
-        name="``  `                                                                                                                                                                                                                                                                                           ``"
+        name="index"
         options={{
           title: "",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ focused }) => (
             <View style={styles.iconContainer}>
               <Ionicons
                 name="home-outline"
@@ -46,15 +46,15 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Favorite */}
+      {/* Products */}
       <Tabs.Screen
-        name="favorite"
+        name="products"
         options={{
           title: "",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ focused }) => (
             <View style={styles.iconContainer}>
               <Ionicons
-                name="heart-outline"
+                name="bag-handle-outline"
                 size={26}
                 color={focused ? "#5B9EE1" : "#B8C5D0"}
               />
@@ -68,31 +68,27 @@ export default function TabLayout() {
         name="cart"
         options={{
           title: "",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: () => (
             <View style={styles.centerIconWrapper}>
               <View style={styles.centerIconShadow1} />
               <View style={styles.centerIconShadow2} />
               <View style={styles.centerIconCircle}>
-                <Ionicons
-                  name="bag-outline"
-                  size={24}
-                  color="#FFFFFF"
-                />
+                <Ionicons name="bag-outline" size={24} color="#FFFFFF" />
               </View>
             </View>
           ),
         }}
       />
 
-      {/* Notification */}
+      {/* Favorite */}
       <Tabs.Screen
-        name="notification"
+        name="favorite"
         options={{
           title: "",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ focused }) => (
             <View style={styles.iconContainer}>
               <Ionicons
-                name="notifications-outline"
+                name="heart-outline"
                 size={26}
                 color={focused ? "#5B9EE1" : "#B8C5D0"}
               />
@@ -106,19 +102,20 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ focused }) => (
             <View style={styles.iconContainer}>
               <Ionicons
                 name="person-outline"
                 size={26}
                 color={focused ? "#5B9EE1" : "#B8C5D0"}
               />
-</View>
+            </View>
           ),
         }}
       />
 
-      {/* Hidden Screens */}
+      {/* ===== Hidden Screens (không hiện icon trên tab bar) ===== */}
+
       <Tabs.Screen
         name="about"
         options={{
@@ -126,43 +123,20 @@ export default function TabLayout() {
         }}
       />
 
-      <Tabs.Screen
-        name="product"
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="register"
+     <Tabs.Screen
+        name="productDetail"
         options={{
           href: null,
           tabBarStyle: { display: 'none' },
         }}
-      />
+      />      
 
-      <Tabs
-  initialRouteName="login"   // mở login trước
-  screenOptions={{
-    headerShown: false,
-    tabBarStyle: { display: 'none' }, // ẩn tab bar cho login
-  }}
->
-  <Tabs.Screen
-    name="login"
-    options={{
-      href: null,
-      tabBarStyle: { display: 'none' },
-    }}
-  />
-  {/* Các tab khác */}
-</Tabs>
 
+      {/* Nếu cần màn chi tiết riêng cho favorite */}
       <Tabs.Screen
-        name="forgot-password"
+        name="favoriteDetail"
         options={{
           href: null,
-          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>
@@ -171,47 +145,48 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
+    width: 50,
   },
   centerIconWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -25,
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -28,
   },
   centerIconShadow1: {
-    position: 'absolute',
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#5B9EE1',
-    opacity: 0.15,
-    top: 3,
+    position: "absolute",
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
+    backgroundColor: "#5B9EE1",
+    opacity: 0.12,
+    top: 5,
   },
   centerIconShadow2: {
-    position: 'absolute',
-    width: 75,
-    height: 75,
-    borderRadius: 37.5,
-    backgroundColor: '#5B9EE1',
-    opacity: 0.25,
-    top: 0,
+    position: "absolute",
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "#5B9EE1",
+    opacity: 0.2,
+    top: 2,
   },
   centerIconCircle: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
-    backgroundColor: '#5B9EE1',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#5B9EE1",
+    alignItems: "center",
+    justifyContent: "center",
     shadowColor: "#5B9EE1",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 3,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
 });
