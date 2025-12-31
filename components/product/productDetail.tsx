@@ -21,8 +21,8 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 type ProductDetail = {
   tag: string;
   name: string;
-  priceBig: string;
-  priceBottom: string;
+  priceBig: number;
+  priceBottom: number;
   description: string;
   mainImage: any;
   gallery: any[];

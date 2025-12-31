@@ -1,79 +1,69 @@
-// app/(home)/index.tsx
-import { useRouter } from "expo-router";
-import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+// app/(main)/index.tsx
+import React, { useState } from "react";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 
 import CategoryTabs from "../../components/home/CategoryTabs";
 import HomeBanner from "../../components/home/HomeBanner";
 import HomeHeader from "../../components/home/HomeHeader";
-import NewArrivalCard from "../../components/home/NewArrivalCard";
-import ProductCard from "../../components/product/ProductCard";
+import HomeNewArrivalSection from "../../components/home/HomeNewArrivalSection";
+import HomePopularSection from "../../components/home/HomePopularSection";
+import DrawerMenu from "../../components/ui/DrawerMenu";
 import SearchBar from "../../components/ui/SearchBar";
 
 export default function HomeScreen() {
-  const router = useRouter(); // dùng để điều hướng
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    // Simulate data refresh
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  };
 
   return (
     <View style={styles.container}>
-      <HomeHeader />
+      {/* Header with menu button */}
+      <HomeHeader onMenuPress={() => setDrawerVisible(true)} />
 
+      {/* Main scrollable content */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#5B9EE1"]}
+            tintColor="#5B9EE1"
+          />
+        }
       >
-        {/* Ô tìm kiếm */}
+        {/* Search Bar */}
         <SearchBar />
 
-        {/* Banner Nike */}
+        {/* Hero Banner */}
         <HomeBanner />
 
-        {/* Tabs thương hiệu */}
+        {/* Category Tabs */}
         <CategoryTabs />
 
-        {/* Popular Shoes */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Popular Shoes</Text>
-        </View>
+        {/* Popular / Best Sellers */}
+        <HomePopularSection />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginTop: 12 }}
-        >
-          <ProductCard
-            tag="BEST SELLER"
-            name="Nike Jordan"
-            price="$493.00"
-            image={require("../../assets/images/home/sp1.png")}
-            style={{ marginRight: 16 }}
-            onPress={() =>
-              router.push({ pathname: "/product/productDetail", params: { id: "1" } })
-            } // xem chi tiết sản phẩm 1
-          />
-
-          <ProductCard
-            tag="BEST SELLER"
-            name="Nike Air Max"
-            price="$399.00"
-            image={require("../../assets/images/home/sp2.png")}
-            onPress={() =>
-              router.push({ pathname: "/product/productDetail", params: { id: "2" } })
-            } // xem chi tiết sản phẩm 2
-          />
-        </ScrollView>
+        {/* Featured Products */}
+        {/* <HomePopularSection /> */}
 
         {/* New Arrivals */}
-        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-          <Text style={styles.sectionTitle}>New Arrivals</Text>
-        </View>
-
-        <NewArrivalCard
-          tag="BEST CHOICE"
-          name="Nike Air Jordan"
-          price="$849.69"
-          image={require("../../assets/images/home/sp3_bestchoi.png")}
-        />
+        <HomeNewArrivalSection />
       </ScrollView>
+
+      {/* Drawer Menu - slides from left with overlay */}
+      <DrawerMenu
+        visible={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+      />
     </View>
   );
 }
@@ -87,18 +77,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 120,
     paddingTop: 8,
-  },
-  sectionHeader: {
-    marginTop: 28,
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingHorizontal: 4,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.3,
   },
 });

@@ -30,7 +30,7 @@ export default function NotFoundScreen() {
             The page you're looking for doesn't exist.
           </Text>
 
-          <Link href="/(home)" style={styles.button}>
+          <Link href="/" style={styles.button}>
             <View style={[
               styles.buttonContainer,
               {

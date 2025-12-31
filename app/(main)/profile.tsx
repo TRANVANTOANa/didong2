@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Dimensions,
     Image,
@@ -23,10 +23,16 @@ interface MenuItem {
 
 export default function ProfileScreen(): React.JSX.Element {
     const router = useRouter();
-    const [dimensions, setDimensions] = useState<ScaledSize>(Dimensions.get('window'));
+    const [dimensions, setDimensions] = useState<ScaledSize>(
+        Dimensions.get('window')
+    );
 
     useEffect(() => {
-        const subscription = Dimensions.addEventListener('change', ({ window }: { window: ScaledSize }) => {
+        const subscription = Dimensions.addEventListener('change', ({
+            window,
+        }: {
+            window: ScaledSize;
+        }) => {
             setDimensions(window);
         });
 
@@ -41,27 +47,28 @@ export default function ProfileScreen(): React.JSX.Element {
             icon: 'person-outline',
             title: 'Edit Profile',
             subtitle: 'Update your information',
-            onPress: () => console.log('Edit Profile'),
+            onPress: () => router.push('/account/edit-profile'),
         },
         {
             id: 2,
             icon: 'bag-outline',
             title: 'My Orders',
             subtitle: 'View your order history',
-            onPress: () => console.log('My Orders'),
+            onPress: () => router.push('/account/my-orders'),
         },
         {
             id: 3,
             icon: 'location-outline',
             title: 'Delivery Address',
             subtitle: 'Manage shipping addresses',
-            onPress: () => console.log('Delivery Address'),
+            onPress: () => router.push('/account/address'),
         },
         {
             id: 4,
             icon: 'card-outline',
             title: 'Payment Methods',
             subtitle: 'Manage payment options',
+            // Sau này tạo màn payment-methods thì đổi lại path
             onPress: () => console.log('Payment Methods'),
         },
         {
@@ -83,7 +90,7 @@ export default function ProfileScreen(): React.JSX.Element {
             icon: 'settings-outline',
             title: 'Settings',
             subtitle: 'App preferences',
-            onPress: () => console.log('Settings'),
+            onPress: () => router.push('/account/settings'),
         },
         {
             id: 8,
@@ -97,6 +104,10 @@ export default function ProfileScreen(): React.JSX.Element {
     const handleLogout = (): void => {
         console.log('Logout');
         router.push('/(auth)/login');
+    };
+
+    const handleEditProfile = (): void => {
+        router.push('/account/edit-profile');
     };
 
     return (
@@ -118,7 +129,10 @@ export default function ProfileScreen(): React.JSX.Element {
                     <View style={styles.avatarContainer}>
                         <Image
                             source={require('../../assets/images/home/user.png')}
-                            style={[styles.avatar, { width: width * 0.22, height: width * 0.22 }]}
+                            style={[
+                                styles.avatar,
+                                { width: width * 0.22, height: width * 0.22 },
+                            ]}
                         />
                         <TouchableOpacity style={styles.editAvatarBtn}>
                             <Ionicons name="camera" size={18} color="#FFFFFF" />
@@ -139,14 +153,19 @@ export default function ProfileScreen(): React.JSX.Element {
 
                     <TouchableOpacity
                         style={styles.editProfileBtn}
-                        onPress={() => console.log('Edit Profile')}
+                        onPress={handleEditProfile}
                     >
                         <Ionicons name="create-outline" size={20} color="#5B9EE1" />
                     </TouchableOpacity>
                 </View>
 
                 {/* Menu Items */}
-                <View style={[styles.menuContainer, { marginTop: height * 0.03, marginHorizontal: width * 0.05 }]}>
+                <View
+                    style={[
+                        styles.menuContainer,
+                        { marginTop: height * 0.03, marginHorizontal: width * 0.05 },
+                    ]}
+                >
                     {menuItems.map((item) => (
                         <TouchableOpacity
                             key={item.id}
@@ -162,7 +181,9 @@ export default function ProfileScreen(): React.JSX.Element {
                                 <Text style={[styles.menuTitle, { fontSize: width * 0.04 }]}>
                                     {item.title}
                                 </Text>
-                                <Text style={[styles.menuSubtitle, { fontSize: width * 0.032 }]}>
+                                <Text
+                                    style={[styles.menuSubtitle, { fontSize: width * 0.032 }]}
+                                >
                                     {item.subtitle}
                                 </Text>
                             </View>
@@ -180,7 +201,7 @@ export default function ProfileScreen(): React.JSX.Element {
                             marginHorizontal: width * 0.05,
                             marginTop: height * 0.03,
                             paddingVertical: height * 0.02,
-                        }
+                        },
                     ]}
                     onPress={handleLogout}
                     activeOpacity={0.8}
@@ -192,7 +213,12 @@ export default function ProfileScreen(): React.JSX.Element {
                 </TouchableOpacity>
 
                 {/* App Version */}
-                <Text style={[styles.versionText, { fontSize: width * 0.03, marginTop: height * 0.02 }]}>
+                <Text
+                    style={[
+                        styles.versionText,
+                        { fontSize: width * 0.03, marginTop: height * 0.02 },
+                    ]}
+                >
                     Version 1.0.0
                 </Text>
             </ScrollView>

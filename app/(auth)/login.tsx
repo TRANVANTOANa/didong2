@@ -3,327 +3,214 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
-    Dimensions,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScaledSize,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
-export default function LoginScreen(): React.JSX.Element {
-    const router = useRouter();
-    const [email, setEmail] = useState<string>('');
-    const [password, setPassword] = useState<string>('');
-    const [showPassword, setShowPassword] = useState<boolean>(false);
-    const [dimensions, setDimensions] = useState<ScaledSize>(Dimensions.get('window'));
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 
-    useEffect(() => {
-        const subscription = Dimensions.addEventListener('change', ({ window }: { window: ScaledSize }) => {
-            setDimensions(window);
-        });
+import {
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithCredential,
+} from 'firebase/auth';
 
-        return () => subscription?.remove();
-    }, []);
+import { auth } from '../../firebase/firebaseConfig';
 
-    const handleLogin = (): void => {
-        // Mock login - navigate to home screen
-        console.log('Login:', { email, password });
-        // Navigate to home screen by replacing current route
-        router.replace('/(main)');
-    };
+WebBrowser.maybeCompleteAuthSession();
 
-    const handleGoogleSignIn = (): void => {
-        console.log('Google Sign In');
-    };
+export default function LoginScreen() {
+  const router = useRouter();
 
-    const handleRecoveryPassword = (): void => {
-        router.push('/(auth)/forgot-password');
-    };
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-    const handleSignUpNavigation = (): void => {
-        router.push('/(auth)/register');
-    };
+  // ⚠️ PHẢI LÀ CLIENT ID GOOGLE THẬT
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+    androidClientId: 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com',
+    iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
+  });
 
-    const { width, height } = dimensions;
+  // 🔐 LOGIN EMAIL / PASSWORD
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email và mật khẩu');
+      return;
+    }
 
-    return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    try {
+      setLoading(true);
+
+      await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+
+      // ✅ LOGIN THÀNH CÔNG
+      router.replace('/(main)');
+
+    } catch (error: any) {
+      console.log('LOGIN ERROR:', error.code);
+
+      let message = 'Đăng nhập thất bại';
+
+      switch (error.code) {
+        case 'auth/user-not-found':
+          message = 'Email không tồn tại';
+          break;
+        case 'auth/wrong-password':
+          message = 'Sai mật khẩu';
+          break;
+        case 'auth/invalid-email':
+          message = 'Email không hợp lệ';
+          break;
+        case 'auth/too-many-requests':
+          message = 'Thử lại sau vài phút';
+          break;
+      }
+
+      Alert.alert('Lỗi', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔵 GOOGLE LOGIN
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.authentication!;
+
+      const credential = GoogleAuthProvider.credential(id_token);
+
+      signInWithCredential(auth, credential)
+        .then(() => router.replace('/(main)'))
+        .catch(err =>
+          Alert.alert('Lỗi Google', err.message || 'Google login failed')
+        );
+    }
+  }, [response]);
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar style="dark" />
+
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Text style={styles.title}>Hello Again!</Text>
+
+        {/* EMAIL */}
+        <TextInput
+          placeholder="Email"
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+
+        {/* PASSWORD */}
+        <View style={styles.passwordBox}>
+          <TextInput
+            placeholder="Password"
+            style={{ flex: 1 }}
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Ionicons
+              name={showPassword ? 'eye-off' : 'eye'}
+              size={22}
+              color="#777"
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* LOGIN BUTTON */}
+        <TouchableOpacity
+          style={styles.loginBtn}
+          onPress={handleLogin}
+          disabled={loading}
         >
-            <StatusBar style="dark" />
-            <ScrollView
-                contentContainerStyle={[
-                    styles.scrollContent,
-                    { paddingHorizontal: width * 0.06 }
-                ]}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-            >
-                {/* Back Button */}
-                <TouchableOpacity
-                    style={[styles.backButton, { marginTop: height * 0.06 }]}
-                    onPress={() => router.back()}
-                >
-                    <Ionicons name="chevron-back" size={24} color="#1A2530" />
-                </TouchableOpacity>
+          <Text style={{ color: '#fff', fontWeight: '600' }}>
+            {loading ? 'ĐANG ĐĂNG NHẬP...' : 'Sign In'}
+          </Text>
+        </TouchableOpacity>
 
-                {/* Header */}
-                <View style={[styles.header, { marginBottom: height * 0.05 }]}>
-                    <Text style={[styles.title, { fontSize: width * 0.07 }]}>
-                        Hello Again!
-                    </Text>
-                    <Text style={[styles.subtitle, { fontSize: width * 0.038 }]}>
-                        Welcome Back You've Been Missed!
-                    </Text>
-                </View>
+        {/* GOOGLE */}
+        <TouchableOpacity
+          style={styles.googleBtn}
+          onPress={() => promptAsync()}
+          disabled={!request}
+        >
+          <Image
+            source={require('../../assets/images/onboard/google.png')}
+            style={{ width: 20, height: 20, marginRight: 8 }}
+          />
+          <Text>Sign in with Google</Text>
+        </TouchableOpacity>
 
-                {/* Form */}
-                <View style={styles.form}>
-                    {/* Email Input */}
-                    <View style={styles.inputContainer}>
-                        <Text style={[styles.label, { fontSize: width * 0.035 }]}>
-                            Email Address
-                        </Text>
-                        <TextInput
-                            style={[
-                                styles.input,
-                                {
-                                    paddingVertical: height * 0.02,
-                                    fontSize: width * 0.038,
-                                }
-                            ]}
-                            placeholder="alisonbecker@gmail.com"
-                            placeholderTextColor="#B0B0B0"
-                            value={email}
-                            onChangeText={setEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                    </View>
-
-                    {/* Password Input */}
-                    <View style={styles.inputContainer}>
-                        <Text style={[styles.label, { fontSize: width * 0.035 }]}>
-                            Password
-                        </Text>
-                        <View style={styles.passwordContainer}>
-                            <TextInput
-                                style={[
-                                    styles.passwordInput,
-                                    {
-                                        paddingVertical: height * 0.02,
-                                        fontSize: width * 0.038,
-                                    }
-                                ]}
-                                placeholder="••••••••"
-                                placeholderTextColor="#B0B0B0"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry={!showPassword}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
-                            <TouchableOpacity
-                                style={styles.eyeIcon}
-                                onPress={() => setShowPassword(!showPassword)}
-                            >
-                                <Ionicons
-                                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                                    size={22}
-                                    color="#707B81"
-                                />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Recovery Password Link */}
-                        <TouchableOpacity
-                            style={styles.recoveryLink}
-                            onPress={handleRecoveryPassword}
-                        >
-                            <Text style={[styles.recoveryText, { fontSize: width * 0.033 }]}>
-                                Recovery Password
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Sign In Button */}
-                    <TouchableOpacity
-                        style={[
-                            styles.signInButton,
-                            {
-                                paddingVertical: height * 0.02,
-                                marginTop: height * 0.02,
-                            }
-                        ]}
-                        onPress={handleLogin}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={[styles.signInButtonText, { fontSize: width * 0.04 }]}>
-                            Sign In
-                        </Text>
-                    </TouchableOpacity>
-
-                    {/* Google Sign In */}
-                    <TouchableOpacity
-                        style={[
-                            styles.googleButton,
-                            {
-                                paddingVertical: height * 0.02,
-                                marginTop: height * 0.02,
-                            }
-                        ]}
-                        onPress={handleGoogleSignIn}
-                        activeOpacity={0.8}
-                    >
-                        <Image
-                            source={require('../../assets/images/onboard/google.png')}
-                            style={[styles.googleIcon, { width: width * 0.05, height: width * 0.05 }]}
-                        />
-                        <Text style={[styles.googleButtonText, { fontSize: width * 0.038 }]}>
-                            Sign in with google
-                        </Text>
-                    </TouchableOpacity>
-
-                    {/* Sign Up Link */}
-                    <View style={[styles.signUpContainer, { marginTop: height * 0.03 }]}>
-                        <Text style={[styles.signUpText, { fontSize: width * 0.035 }]}>
-                            Don't Have An Account?{' '}
-                        </Text>
-                        <TouchableOpacity onPress={handleSignUpNavigation}>
-                            <Text style={[styles.signUpLink, { fontSize: width * 0.035 }]}>
-                                Sign Up For Free
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </ScrollView>
-        </KeyboardAvoidingView>
-    );
+        {/* REGISTER */}
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/register')}
+          style={{ marginTop: 20 }}
+        >
+          <Text style={{ textAlign: 'center', color: '#5B9EE1' }}>
+            Chưa có tài khoản? Đăng ký
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-    },
-    scrollContent: {
-        flexGrow: 1,
-        paddingBottom: 40,
-    },
-    backButton: {
-        width: 40,
-        height: 40,
-        marginBottom: 10,
-        justifyContent: 'center',
-    },
-    header: {
-    },
-    title: {
-        fontWeight: 'bold',
-        color: '#1A2530',
-        marginBottom: 8,
-    },
-    subtitle: {
-        color: '#778899',
-        fontWeight: '400',
-    },
-    form: {
-        flex: 1,
-    },
-    inputContainer: {
-        marginBottom: 24,
-    },
-    label: {
-        fontWeight: '500',
-        color: '#1A2530',
-        marginBottom: 10,
-    },
-    input: {
-        backgroundColor: '#F7F8FA',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        color: '#1A2530',
-        borderWidth: 1,
-        borderColor: '#E8EAED',
-    },
-    passwordContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F7F8FA',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E8EAED',
-    },
-    passwordInput: {
-        flex: 1,
-        paddingHorizontal: 16,
-        color: '#1A2530',
-    },
-    eyeIcon: {
-        padding: 16,
-    },
-    recoveryLink: {
-        alignSelf: 'flex-end',
-        marginTop: 8,
-    },
-    recoveryText: {
-        color: '#778899',
-        fontWeight: '500',
-    },
-    signInButton: {
-        backgroundColor: '#5B9EE1',
-        borderRadius: 25,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#5B9EE1',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    signInButtonText: {
-        fontWeight: '600',
-        color: '#FFFFFF',
-        letterSpacing: 0.5,
-    },
-    googleButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 25,
-        borderWidth: 1,
-        borderColor: '#E8EAED',
-    },
-    googleIcon: {
-        resizeMode: 'contain',
-    },
-    googleButtonText: {
-        fontWeight: '500',
-        color: '#1A2530',
-        marginLeft: 10,
-    },
-    signUpContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    signUpText: {
-        color: '#778899',
-    },
-    signUpLink: {
-        fontWeight: '600',
-        color: '#5B9EE1',
-    },
+  container: { flex: 1, backgroundColor: '#fff' },
+  scroll: { flexGrow: 1, padding: 24, justifyContent: 'center' },
+  title: { fontSize: 28, fontWeight: '700', marginBottom: 32 },
+  input: {
+    backgroundColor: '#F7F8FA',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  passwordBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F7F8FA',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  loginBtn: {
+    backgroundColor: '#5B9EE1',
+    padding: 16,
+    borderRadius: 24,
+    alignItems: 'center',
+  },
+  googleBtn: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 24,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
