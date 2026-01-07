@@ -15,13 +15,13 @@ import {
   View,
 } from 'react-native';
 
-import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 
 import {
-  signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithCredential,
+  signInWithEmailAndPassword,
 } from 'firebase/auth';
 
 import { auth } from '../../firebase/firebaseConfig';
@@ -140,6 +140,16 @@ export default function LoginScreen() {
             />
           </TouchableOpacity>
         </View>
+
+        {/* FORGOT PASSWORD */}
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/forgot-password')}
+          style={{ alignSelf: 'flex-end', marginBottom: 20 }}
+        >
+          <Text style={{ color: '#5B9EE1', fontSize: 14 }}>
+            Quên mật khẩu?
+          </Text>
+        </TouchableOpacity>
 
         {/* LOGIN BUTTON */}
         <TouchableOpacity

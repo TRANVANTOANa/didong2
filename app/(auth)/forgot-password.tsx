@@ -1,19 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from 'react-native';
+
+import { auth } from '../../firebase/firebaseConfig';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -21,39 +24,76 @@ export default function ForgotPasswordScreen() {
 
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
-  const handleContinue = async () => {
+  // ⏱ Cooldown timer
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
+
+  const handleResetPassword = async () => {
+    if (cooldown > 0) {
+      Alert.alert('Thông báo', `Vui lòng chờ ${cooldown}s để thử lại`);
+      return;
+    }
+
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address');
+      Alert.alert('Lỗi', 'Vui lòng nhập địa chỉ email');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert('Lỗi', 'Vui lòng nhập địa chỉ email hợp lệ');
       return;
     }
 
     setIsLoading(true);
 
-    // Giả lập gửi OTP
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+
+      setCooldown(60); // ⏳ 60 giây chống spam
+
       Alert.alert(
-        'Success',
-        'A verification code has been sent to your email.',
+        'Thành công',
+        `Email khôi phục mật khẩu đã được gửi đến ${email.trim()}.`,
         [
           {
             text: 'OK',
-            onPress: () => {
-              // Đảm bảo 100% đúng route khi file là app/(tabs)/otp.tsx
-              router.push('/(auth)/otp');
-            },
+            onPress: () => router.back(),
           },
         ],
         { cancelable: false }
       );
-    }, 1200);
+    } catch (error: any) {
+      console.log('RESET PASSWORD ERROR:', error.code);
+
+      let message = 'Không thể gửi email khôi phục mật khẩu';
+
+      switch (error.code) {
+        case 'auth/user-not-found':
+          message = 'Email này chưa được đăng ký';
+          break;
+        case 'auth/invalid-email':
+          message = 'Địa chỉ email không hợp lệ';
+          break;
+        case 'auth/too-many-requests':
+          message = 'Bạn gửi quá nhiều lần. Vui lòng thử lại sau vài phút';
+          setCooldown(60);
+          break;
+        case 'auth/network-request-failed':
+          message = 'Lỗi kết nối mạng. Vui lòng kiểm tra internet';
+          break;
+      }
+
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -66,14 +106,13 @@ export default function ForgotPasswordScreen() {
 
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, paddingHorizontal: width * 0.06 }}
-        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Back Button */}
+        {/* Back */}
         <TouchableOpacity
           style={{ marginTop: height * 0.06, marginBottom: height * 0.03 }}
           onPress={() => router.back()}
-          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
         >
           <Ionicons name="chevron-back" size={28} color="#1A2530" />
         </TouchableOpacity>
@@ -81,64 +120,53 @@ export default function ForgotPasswordScreen() {
         {/* Header */}
         <View style={{ marginBottom: height * 0.05 }}>
           <Text style={{ fontSize: width * 0.072, fontWeight: 'bold', color: '#1A2530' }}>
-            Recovery Password
+            Quên mật khẩu?
           </Text>
-          <Text
-            style={{
-              fontSize: width * 0.04,
-              color: '#778899',
-              marginTop: 12,
-              lineHeight: 22,
-            }}
-          >
-            Please enter your email address to{'\n'}
-            receive a verification code
+          <Text style={{ fontSize: width * 0.04, color: '#778899', marginTop: 12 }}>
+            Nhập email đã đăng ký để nhận link khôi phục mật khẩu
           </Text>
         </View>
 
         {/* Form */}
         <View style={styles.form}>
-          {/* Email Input */}
           <View style={styles.inputContainer}>
-            <Text style={{ fontSize: width * 0.038, fontWeight: '600', color: '#1A2530', marginBottom: 10 }}>
-              Email Address
+            <Text style={{ fontSize: width * 0.038, fontWeight: '600', marginBottom: 10 }}>
+              Địa chỉ Email
             </Text>
             <TextInput
-              style={{
-                backgroundColor: '#F7F8FA',
-                borderRadius: 14,
-                paddingHorizontal: 18,
-                paddingVertical: height * 0.022,
-                fontSize: width * 0.042,
-                color: '#1A2530',
-                borderWidth: 1.5,
-                borderColor: '#E8EAED',
-              }}
+              style={styles.input}
               placeholder="example@gmail.com"
               placeholderTextColor="#B0B0B0"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              autoCorrect={false}
               editable={!isLoading}
             />
           </View>
 
-          {/* Continue Button */}
           <TouchableOpacity
             style={[
               styles.continueButton,
-              { paddingVertical: height * 0.022, marginTop: height * 0.03 },
-              isLoading && styles.buttonDisabled,
+              isLoading || cooldown > 0 ? styles.buttonDisabled : null,
             ]}
-            onPress={handleContinue}
-            disabled={isLoading}
-            activeOpacity={0.8}
+            onPress={handleResetPassword}
+            disabled={isLoading || cooldown > 0}
           >
-            <Text style={{ fontSize: width * 0.045, fontWeight: '600', color: '#FFFFFF' }}>
-              {isLoading ? 'Sending...' : 'Continue'}
+            <Text style={{ color: '#fff', fontSize: width * 0.045 }}>
+              {isLoading
+                ? 'Đang gửi...'
+                : cooldown > 0
+                  ? `Chờ ${cooldown}s`
+                  : 'Gửi email khôi phục'}
             </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ marginTop: 24, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#5B9EE1' }}>← Quay lại đăng nhập</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -157,16 +185,21 @@ const styles = StyleSheet.create({
   inputContainer: {
     marginBottom: 10,
   },
+  input: {
+    backgroundColor: '#F7F8FA',
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    fontSize: 16,
+    borderWidth: 1.5,
+    borderColor: '#E8EAED',
+  },
   continueButton: {
     backgroundColor: '#5B9EE1',
     borderRadius: 30,
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#5B9EE1',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+    paddingVertical: 16,
+    marginTop: 20,
   },
   buttonDisabled: {
     opacity: 0.6,
