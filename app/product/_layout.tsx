@@ -9,7 +9,7 @@ export default function ProductLayout() {
                 animation: "slide_from_right",
             }}
         >
-            <Stack.Screen name="[id]" />
+            <Stack.Screen name="productDetail" />
             <Stack.Screen name="checkout" />
             <Stack.Screen name="order-success" />
             <Stack.Screen name="order-status" />

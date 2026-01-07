@@ -4,8 +4,8 @@ export type FavoriteItem = {
   id: string;
   name: string;
   tag: string;
-  price: number;
-  image: string;
+  price: string;
+  image: any; // Allow string URL or require(...) object
 };
 
 type FavoriteContextType = {

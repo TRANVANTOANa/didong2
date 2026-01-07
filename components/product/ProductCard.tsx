@@ -1,7 +1,8 @@
 // components/product/ProductCard.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Image,
   ImageSourcePropType,
@@ -24,7 +25,7 @@ type Props = {
   id: string;
   tag: string;
   name: string;
-  price: number;
+  price: string;
   image: ImageSourcePropType;
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
@@ -45,6 +46,8 @@ export default function ProductCard({
 }: Props) {
   const { isFavorite, toggleFavorite } = useFavorite();
   const isLiked = isFavorite(id);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
 
   // Xác định màu tag dựa trên loại tag
   const getTagColor = () => {
@@ -68,6 +71,12 @@ export default function ProductCard({
     toggleFavorite({ id, tag, name, price, image });
   };
 
+  // Check if image has a valid URI
+  const hasValidImage = image && (
+    typeof image === 'number' || // local require()
+    (typeof image === 'object' && 'uri' in image && image.uri && image.uri.length > 0)
+  );
+
   return (
     <TouchableOpacity
       activeOpacity={0.9}
@@ -76,7 +85,28 @@ export default function ProductCard({
     >
       {/* Image container */}
       <View style={styles.imageContainer}>
-        <Image source={image} style={styles.productImage} />
+        {imageLoading && hasValidImage && (
+          <View style={styles.imagePlaceholder}>
+            <ActivityIndicator size="small" color="#5B9EE1" />
+          </View>
+        )}
+        {imageError || !hasValidImage ? (
+          <View style={styles.imagePlaceholder}>
+            <Ionicons name="image-outline" size={32} color="#CBD5E1" />
+          </View>
+        ) : (
+          <Image
+            source={image}
+            style={[styles.productImage, imageLoading && { opacity: 0 }]}
+            resizeMode="contain"
+            onLoadStart={() => setImageLoading(true)}
+            onLoadEnd={() => setImageLoading(false)}
+            onError={() => {
+              setImageError(true);
+              setImageLoading(false);
+            }}
+          />
+        )}
 
         {/* Favorite Button */}
         {showFavoriteButton && (
@@ -148,7 +178,14 @@ const styles = StyleSheet.create({
   productImage: {
     width: "75%",
     height: "100%",
-    resizeMode: "contain",
+  },
+  imagePlaceholder: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
   },
   favoriteButton: {
     position: "absolute",

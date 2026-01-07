@@ -62,7 +62,7 @@ export default function CartScreen() {
               style={styles.cartRow}
             >
               <View style={styles.itemImageContainer}>
-                <Image source={item.image} style={styles.itemImage} />
+                <Image source={item.image} style={styles.itemImage} resizeMode="contain" />
               </View>
 
               <View style={styles.itemInfo}>
@@ -255,7 +255,6 @@ const styles = StyleSheet.create({
   itemImage: {
     width: 50,
     height: 50,
-    resizeMode: "contain",
   },
   itemInfo: {
     flex: 1,

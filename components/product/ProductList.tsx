@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+    ActivityIndicator,
     Dimensions,
     FlatList,
     ListRenderItem,
@@ -24,70 +25,13 @@ export type Product = {
     id: string;
     tag: string;
     name: string;
-    price: number;
+    price: string;
     category: string;
-    image: any;
+    imageUrl: string; // Changed from 'image: any' to 'imageUrl: string'
 };
 
-// Dữ liệu sản phẩm
-const PRODUCTS: Product[] = [
-    {
-        id: "1",
-        tag: "BEST SELLER",
-        name: "Nike Air Jordan Blue",
-        price: "$493.00",
-        category: "Nike",
-        image: require("../../assets/images/home/sp1.png"),
-    },
-    {
-        id: "2",
-        tag: "BEST SELLER",
-        name: "Nike Air Max Red",
-        price: "$399.00",
-        category: "Nike",
-        image: require("../../assets/images/home/sp2.png"),
-    },
-    {
-        id: "3",
-        tag: "TRENDING",
-        name: "Nike Runner Orange",
-        price: "$429.00",
-        category: "Nike",
-        image: require("../../assets/images/home/sp3.png"),
-    },
-    {
-        id: "4",
-        tag: "BEST CHOICE",
-        name: "Nike Air Jordan 2022",
-        price: "$849.69",
-        category: "Nike",
-        image: require("../../assets/images/home/sp3_bestchoi.png"),
-    },
-    {
-        id: "5",
-        tag: "NEW",
-        name: "Nike Zoom Purple",
-        price: "$520.00",
-        category: "Nike",
-        image: require("../../assets/images/home/sp4.png"),
-    },
-    {
-        id: "6",
-        tag: "NEW",
-        name: "Puma Speed White",
-        price: "$310.00",
-        category: "Puma",
-        image: require("../../assets/images/home/sp5.jpg"),
-    },
-    {
-        id: "7",
-        tag: "NEW",
-        name: "Puma Classic White",
-        price: "$289.00",
-        category: "Puma",
-        image: require("../../assets/images/home/sp8.jpg"),
-    },
-];
+
+
 
 // Danh sách category
 const CATEGORIES = ["All", "Nike", "Puma", "Adidas"];
@@ -101,9 +45,32 @@ export default function ProductList() {
     const [sortOrder, setSortOrder] = useState<"asc" | "desc" | null>(null);
     const [searchKeyword, setSearchKeyword] = useState(params.search || "");
 
+    // Dữ liệu sản phẩm sẽ được lấy từ Firestore
+    const [products, setProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+
+    useEffect(() => {
+        // Fetch products from Firebase
+        import("../../firebase/products").then(({ fetchProducts }) => {
+            fetchProducts()
+                .then((data) => {
+                    // Debug: Log first product to check imageUrl
+                    if (data.length > 0) {
+                        console.log("Sample product data:", JSON.stringify(data[0], null, 2));
+                        console.log("All imageUrls:", data.map(p => ({ id: p.id, imageUrl: p.imageUrl })));
+                    }
+                    setProducts(data);
+                })
+                .catch((error) => {
+                    console.error("Error fetching products:", error);
+                })
+                .finally(() => setLoading(false));
+        });
+    }, []);
+
     // Logic lọc & sắp xếp
     const filteredProducts = useMemo(() => {
-        let result = [...PRODUCTS];
+        let result = [...products];
 
         // Lọc theo Keyword search
         if (searchKeyword.trim()) {
@@ -124,14 +91,14 @@ export default function ProductList() {
         // Sắp xếp theo Giá
         if (sortOrder) {
             result.sort((a, b) => {
-                const priceA = parseFloat(a.price.replace("$", ""));
-                const priceB = parseFloat(b.price.replace("$", ""));
+                const priceA = parseFloat(String(a.price).replace("$", ""));
+                const priceB = parseFloat(String(b.price).replace("$", ""));
                 return sortOrder === "asc" ? priceA - priceB : priceB - priceA;
             });
         }
 
         return result;
-    }, [activeCategory, sortOrder, searchKeyword]);
+    }, [activeCategory, sortOrder, searchKeyword, products]);
 
     // Clear search
     const handleClearSearch = () => {
@@ -155,7 +122,7 @@ export default function ProductList() {
                     tag={item.tag}
                     name={item.name}
                     price={item.price}
-                    image={item.image}
+                    image={{ uri: item.imageUrl }} // Changed to imageUrl
                     onPress={() =>
                         router.push({
                             pathname: "/product/productDetail",
@@ -171,115 +138,130 @@ export default function ProductList() {
     };
 
     return (
-        <View style={styles.container}>
-            {/* Header Title */}
-            <View style={styles.headerSection}>
-                <Text style={styles.title}>
-                    {searchKeyword ? `Search: "${searchKeyword}"` : "All Products"}
-                </Text>
+        loading ? (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#5B9EE1" />
             </View>
-
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <View style={styles.searchInputWrapper}>
-                    <Ionicons name="search" size={18} color="#5B9EE1" />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search by name, category..."
-                        placeholderTextColor="#9CA3AF"
-                        value={searchKeyword}
-                        onChangeText={setSearchKeyword}
-                        returnKeyType="search"
-                    />
-                    {searchKeyword.length > 0 && (
-                        <TouchableOpacity onPress={handleClearSearch}>
-                            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
-
-            {/* Filter Section */}
-            <View style={styles.filterWrapper}>
-                {/* Category Tabs */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.categoryContainer}
-                >
-                    {CATEGORIES.map((cat) => (
-                        <TouchableOpacity
-                            key={cat}
-                            style={[
-                                styles.categoryBtn,
-                                activeCategory === cat && styles.categoryBtnActive,
-                            ]}
-                            onPress={() => setActiveCategory(cat)}
-                        >
-                            <Text
-                                style={[
-                                    styles.categoryText,
-                                    activeCategory === cat && styles.categoryTextActive,
-                                ]}
-                            >
-                                {cat}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-
-                {/* Sort Bar */}
-                <View style={styles.sortBar}>
-                    <Text style={styles.resultText}>
-                        Found {filteredProducts.length} items
+        ) : (
+            <View style={styles.container}>
+                {/* Header Title */}
+                <View style={styles.headerSection}>
+                    <Text style={styles.title}>
+                        {searchKeyword ? `Search: "${searchKeyword}"` : "All Products"}
                     </Text>
-
-                    <TouchableOpacity style={styles.sortBtn} onPress={toggleSort}>
-                        <Text style={styles.sortBtnText}>
-                            Sort:{" "}
-                            {sortOrder === "asc"
-                                ? "Low to High"
-                                : sortOrder === "desc"
-                                    ? "High to Low"
-                                    : "Default"}
-                        </Text>
-                        <Ionicons
-                            name={
-                                sortOrder === "asc"
-                                    ? "arrow-up"
-                                    : sortOrder === "desc"
-                                        ? "arrow-down"
-                                        : "filter"
-                            }
-                            size={14}
-                            color="#5B9EE1"
-                        />
-                    </TouchableOpacity>
                 </View>
-            </View>
 
-            {/* Product Grid */}
-            <FlatList
-                data={filteredProducts}
-                keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                numColumns={2}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    <View style={styles.emptyView}>
-                        <Ionicons name="search-outline" size={48} color="#CBD5E1" />
-                        <Text style={styles.emptyText}>No products found.</Text>
+                {/* Search Bar */}
+                <View style={styles.searchContainer}>
+                    <View style={styles.searchInputWrapper}>
+                        <Ionicons name="search" size={18} color="#5B9EE1" />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search by name, category..."
+                            placeholderTextColor="#9CA3AF"
+                            value={searchKeyword}
+                            onChangeText={setSearchKeyword}
+                            returnKeyType="search"
+                        />
+                        {searchKeyword.length > 0 && (
+                            <TouchableOpacity onPress={handleClearSearch}>
+                                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        )}
                     </View>
-                }
-            />
-        </View>
+                </View >
+
+                {/* Filter Section */}
+                < View style={styles.filterWrapper} >
+                    {/* Category Tabs */}
+                    < ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.categoryContainer}
+                    >
+                        {
+                            CATEGORIES.map((cat) => (
+                                <TouchableOpacity
+                                    key={cat}
+                                    style={[
+                                        styles.categoryBtn,
+                                        activeCategory === cat && styles.categoryBtnActive,
+                                    ]}
+                                    onPress={() => setActiveCategory(cat)}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.categoryText,
+                                            activeCategory === cat && styles.categoryTextActive,
+                                        ]}
+                                    >
+                                        {cat}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))
+                        }
+                    </ScrollView >
+
+                    {/* Sort Bar */}
+                    < View style={styles.sortBar} >
+                        <Text style={styles.resultText}>
+                            Found {filteredProducts.length} items
+                        </Text>
+
+                        <TouchableOpacity style={styles.sortBtn} onPress={toggleSort}>
+                            <Text style={styles.sortBtnText}>
+                                Sort:{" "}
+                                {sortOrder === "asc"
+                                    ? "Low to High"
+                                    : sortOrder === "desc"
+                                        ? "High to Low"
+                                        : "Default"}
+                            </Text>
+                            <Ionicons
+                                name={
+                                    sortOrder === "asc"
+                                        ? "arrow-up"
+                                        : sortOrder === "desc"
+                                            ? "arrow-down"
+                                            : "filter"
+                                }
+                                size={14}
+                                color="#5B9EE1"
+                            />
+                        </TouchableOpacity>
+                    </View >
+                </View >
+
+                {/* Product Grid */}
+                < FlatList
+                    data={filteredProducts}
+                    keyExtractor={(item) => item.id
+                    }
+                    renderItem={renderItem}
+                    numColumns={2}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={
+                        < View style={styles.emptyView} >
+                            <Ionicons name="search-outline" size={48} color="#CBD5E1" />
+                            <Text style={styles.emptyText}>No products found.</Text>
+                        </View >
+                    }
+                />
+            </View>
+        )
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: "#F8FAFC",
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
         backgroundColor: "#F8FAFC",
     },
     // Header

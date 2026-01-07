@@ -224,6 +224,7 @@ export default function ProductDetailScreen() {
             <Image
               source={product.gallery[selectedImageIndex]}
               style={styles.mainImage}
+              resizeMode="contain"
             />
           </View>
 
@@ -238,7 +239,7 @@ export default function ProductDetailScreen() {
                 ]}
                 onPress={() => setSelectedImageIndex(index)}
               >
-                <Image source={img} style={styles.thumbnailImage} />
+                <Image source={img} style={styles.thumbnailImage} resizeMode="contain" />
               </TouchableOpacity>
             ))}
           </View>
@@ -401,7 +402,6 @@ const styles = StyleSheet.create({
   mainImage: {
     width: SCREEN_WIDTH - 96,
     height: 180,
-    resizeMode: "contain",
   },
   // Thumbnails
   thumbnailRow: {
@@ -427,7 +427,6 @@ const styles = StyleSheet.create({
   thumbnailImage: {
     width: 36,
     height: 36,
-    resizeMode: "contain",
   },
   // Info Card
   infoCard: {

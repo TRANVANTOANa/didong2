@@ -19,6 +19,7 @@ const HomeBanner = () => {
       <Image
         source={require("../../assets/images/home/bannergiay1.png")}
         style={styles.shoeImage}
+        resizeMode="contain"
       />
     </View>
   );
@@ -61,7 +62,6 @@ const styles = StyleSheet.create({
   shoeImage: {
     width: 110,
     height: 80,
-    resizeMode: "contain",
     marginLeft: 8,
   },
 });

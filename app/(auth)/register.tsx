@@ -3,23 +3,23 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScaledSize,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScaledSize,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import {
-    createUserWithEmailAndPassword,
-    updateProfile,
+  createUserWithEmailAndPassword,
+  updateProfile,
 } from 'firebase/auth';
 import { auth } from '../../firebase/firebaseConfig';
 
@@ -146,7 +146,7 @@ export default function RegisterScreen(): React.JSX.Element {
             <Text style={styles.label}>Your Name</Text>
             <TextInput
               style={styles.input}
-              placeholder="Alison Becker"
+              placeholder="Input Name"
               value={name}
               onChangeText={setName}
             />

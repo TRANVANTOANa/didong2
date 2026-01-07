@@ -32,7 +32,7 @@ const CategoryTabs = () => {
             style={[styles.pill, isActive && styles.pillActive]}
             onPress={() => setActive(item.id)}
           >
-            <Image source={item.image} style={styles.brandImage} />
+            <Image source={item.image} style={styles.brandImage} resizeMode="contain" />
           </TouchableOpacity>
         );
       })}
@@ -62,6 +62,5 @@ const styles = StyleSheet.create({
   brandImage: {
     width: 28,
     height: 28,
-    resizeMode: "contain",
   },
 });

@@ -93,7 +93,7 @@ export default function CheckoutScreen() {
                     >
                         {items.map((item) => (
                             <View key={`${item.id}-${item.size}`} style={styles.previewItem}>
-                                <Image source={item.image} style={styles.previewImage} />
+                                <Image source={item.image} style={styles.previewImage} resizeMode="contain" />
                                 <Text style={styles.previewQty}>x{item.qty}</Text>
                             </View>
                         ))}
@@ -323,7 +323,6 @@ const styles = StyleSheet.create({
     previewImage: {
         width: 65,
         height: 65,
-        resizeMode: "contain",
     },
     previewQty: {
         position: "absolute",

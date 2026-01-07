@@ -63,7 +63,7 @@ export default function NewArrivalCard({
     >
       {/* Image container */}
       <View style={styles.imageContainer}>
-        <Image source={image} style={styles.productImage} />
+        <Image source={image} style={styles.productImage} resizeMode="contain" />
 
         {/* Favorite Button */}
         <TouchableOpacity
@@ -133,7 +133,6 @@ const styles = StyleSheet.create({
   productImage: {
     width: "85%",
     height: "100%",
-    resizeMode: "contain",
   },
   favoriteButton: {
     position: "absolute",

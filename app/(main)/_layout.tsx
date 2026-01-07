@@ -49,29 +49,7 @@ export default function TabLayout() {
         }}
       />
 
-      {/* ===== Hidden Screens (không hiện icon trên tab bar) ===== */}
 
-      <Tabs.Screen
-        name="about"
-        options={{
-          href: null,
-        }}
-      />
-
-      <Tabs.Screen
-        name="productDetail"
-        options={{
-          href: null,
-        }}
-      />
-
-      {/* Nếu cần màn chi tiết riêng cho favorite */}
-      <Tabs.Screen
-        name="favoriteDetail"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }
