@@ -3,7 +3,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
@@ -19,7 +18,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { auth, db, storage } from "../../firebase/firebaseConfig";
+import { auth, db } from "../../firebase/firebaseConfig";
 
 // Interface cho profile data
 interface UserProfile {
@@ -134,7 +133,7 @@ export default function EditProfileScreen() {
     }, [loadUserProfile]);
 
     // 📤 Resize và nén ảnh trước khi chuyển base64 (cho web)
-    const imageToBase64 = async (uri: string): Promise<string | null> => {
+    const imageToBase64Web = async (uri: string): Promise<string | null> => {
         try {
             return new Promise((resolve, reject) => {
                 const img = document.createElement('img');
@@ -189,41 +188,80 @@ export default function EditProfileScreen() {
         }
     };
 
-    // 📤 Upload avatar lên Firebase Storage hoặc chuyển thành base64 cho web
+    // 📤 Chuyển ảnh thành base64 trên mobile bằng fetch + blob reader
+    const imageToBase64Mobile = async (uri: string): Promise<string | null> => {
+        try {
+            console.log("Mobile: Converting image to base64...");
+
+            // Fetch the image as blob
+            const response = await fetch(uri);
+            const blob = await response.blob();
+
+            // Convert blob to base64
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64String = reader.result as string;
+                    console.log('Mobile image base64 size:', Math.round(base64String.length / 1024), 'KB');
+                    resolve(base64String);
+                };
+                reader.onerror = () => {
+                    reject(new Error('Failed to read blob'));
+                };
+                reader.readAsDataURL(blob);
+            });
+        } catch (error) {
+            console.error("Error converting mobile image to base64:", error);
+            return null;
+        }
+    };
+
+    // 📤 Upload avatar - chuyển thành base64 và lưu vào Firestore
     const uploadAvatar = async (uri: string): Promise<string | null> => {
         try {
             const user = auth.currentUser;
             if (!user) return null;
 
-            // Trên web, chuyển thành base64 và lưu trực tiếp vào Firestore
+            console.log("Platform:", Platform.OS);
+            console.log("Image URI:", uri);
+
+            let base64: string | null = null;
+
+            // Trên web, sử dụng canvas để resize và nén
             if (Platform.OS === "web") {
                 console.log("Web platform: Converting image to base64...");
-                const base64 = await imageToBase64(uri);
-                if (base64) {
-                    console.log("Image converted to base64 successfully");
-                    return base64;
-                }
-                return null;
+                base64 = await imageToBase64Web(uri);
+            } else {
+                // Trên mobile, sử dụng fetch + FileReader
+                console.log("Mobile platform: Converting image to base64...");
+                base64 = await imageToBase64Mobile(uri);
             }
 
-            // Trên mobile, upload lên Storage như bình thường
-            // Fetch image blob
-            const response = await fetch(uri);
-            const blob = await response.blob();
+            if (base64) {
+                console.log("Image converted to base64 successfully");
+                console.log("Base64 length:", base64.length);
 
-            // Tạo reference cho file với timestamp để tránh cache
-            const timestamp = Date.now();
-            const avatarRef = ref(storage, `avatars/${user.uid}/profile_${timestamp}.jpg`);
+                // Kiểm tra kích thước - Firestore có giới hạn 1MB cho mỗi document
+                // Base64 ~1.37x kích thước gốc, nên giới hạn ~700KB
+                if (base64.length > 700000) {
+                    Alert.alert(
+                        "Ảnh quá lớn",
+                        "Vui lòng chọn ảnh có kích thước nhỏ hơn.",
+                        [{ text: "OK" }]
+                    );
+                    return null;
+                }
 
-            // Upload file
-            await uploadBytes(avatarRef, blob);
+                return base64;
+            }
 
-            // Lấy URL download
-            const downloadUrl = await getDownloadURL(avatarRef);
-            console.log("Avatar uploaded successfully:", downloadUrl);
-            return downloadUrl;
+            return null;
         } catch (error: any) {
-            console.error("Error uploading avatar:", error);
+            console.error("Error processing avatar:", error);
+            Alert.alert(
+                "Lỗi",
+                "Không thể xử lý ảnh. Vui lòng thử lại với ảnh khác."
+            );
             return null;
         }
     };

@@ -16,6 +16,7 @@ export type Product = {
     category: string;
     color?: string;
     style?: string;
+    tag?: string; // Thêm field tag để lọc sản phẩm (NEW, HOT, BEST SELLER)
     imageUrl: string;
     description: string;
 };
@@ -44,6 +45,7 @@ async function getAllProducts(): Promise<Product[]> {
                 category: data.category ?? "",
                 color: data.color ?? "",
                 style: data.style ?? "",
+                tag: data.tag ?? "", // Lấy tag từ Firebase (VD: "NEW,HOT,BEST SELLER")
                 imageUrl: data.image ?? data.imageUrl ?? "", // Map 'image' field to 'imageUrl'
                 description: data.description ?? "",
             };
@@ -135,6 +137,17 @@ function analyzeIntentFallback(userMessage: string): any {
     if (msg.includes('chạy bộ') || msg.includes('running')) intent.style = 'running';
     if (msg.includes('casual') || msg.includes('thường ngày')) intent.style = 'casual';
 
+    // Detect tag (BEST SELLER, HOT, NEW)
+    if (msg.includes('best seller') || msg.includes('bán chạy') || msg.includes('ban chay') || msg.includes('hot nhất')) {
+        intent.tag = 'BEST SELLER';
+    }
+    if (msg.includes('hot') || msg.includes('xu hướng') || msg.includes('trending')) {
+        intent.tag = intent.tag || 'HOT';
+    }
+    if (msg.includes('mới') || msg.includes('new') || msg.includes('hàng mới') || msg.includes('vừa về')) {
+        intent.tag = intent.tag || 'NEW';
+    }
+
     console.log('Fallback Intent:', intent);
     return intent;
 }
@@ -144,6 +157,12 @@ export async function searchProducts(intent: any): Promise<Product[]> {
     const allProducts = await getAllProducts();
 
     return allProducts.filter((product) => {
+        // Lọc theo tag (BEST SELLER, HOT, NEW)
+        if (intent.tag) {
+            const tagMatch = product.tag?.toUpperCase().includes(intent.tag.toUpperCase());
+            if (!tagMatch) return false;
+        }
+
         // Lọc theo brand
         if (intent.brand) {
             const brandMatch = product.brand?.toLowerCase().includes(intent.brand.toLowerCase());
@@ -302,15 +321,11 @@ function generateFallbackResponse(userMessage: string, products: Product[]): str
         return "Hiện shop đang có chương trình giảm 10-30% nhiều mẫu hot! 🔥 Bạn xem sản phẩm sale không?";
     }
 
-    // === HOT/BEST SELLER ===
-    if (msg.includes("hot") || msg.includes("best seller") || msg.includes("bán chạy") || msg.includes("xu hướng") || msg.includes("trending")) {
-        return "Các mẫu hot nhất hiện nay là Nike Air Max, Adidas Ultraboost và Jordan 1! 🔥 Bạn thích style nào?";
-    }
+    // === HOT/BEST SELLER === (Bỏ fallback cứng, để logic searchProducts xử lý)
+    // Đã chuyển sang xử lý động bằng cách tìm sản phẩm có tag từ Firebase
 
-    // === NEW ARRIVALS ===
-    if (msg.includes("mới") || msg.includes("new") || msg.includes("vừa về") || msg.includes("hàng mới")) {
-        return "Shop vừa về thêm nhiều mẫu mới! 🆕 Có Nike Dunk, Adidas Samba, New Balance 550... Bạn quan tâm mẫu nào?";
-    }
+    // === NEW ARRIVALS === (Bỏ fallback cứng, để logic searchProducts xử lý)
+    // Đã chuyển sang xử lý động bằng cách tìm sản phẩm có tag từ Firebase
 
     // === RECOMMEND ===
     if (msg.includes("tư vấn") || msg.includes("gợi ý") || msg.includes("recommend") || msg.includes("suggest") || msg.includes("nên mua")) {
@@ -403,7 +418,7 @@ export async function processUserMessage(userMessage: string): Promise<{
         console.log("Intent:", intent);
 
         // Check nếu intent rỗng (không có filter nào)
-        const hasIntent = intent.brand || intent.color || intent.maxPrice || intent.minPrice || intent.style || intent.category;
+        const hasIntent = intent.brand || intent.color || intent.maxPrice || intent.minPrice || intent.style || intent.category || intent.tag;
 
         let products: Product[] = [];
 

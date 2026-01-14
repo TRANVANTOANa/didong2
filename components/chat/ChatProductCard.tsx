@@ -15,11 +15,16 @@ export default function ChatProductCard({ product }: ChatProductCardProps) {
     const formatPrice = (price: string | number) => {
         let numPrice = 0;
         if (typeof price === 'string') {
-            numPrice = parseInt(price.replace(/[^0-9]/g, ""));
+            // Loại bỏ tất cả ký tự không phải số và dấu chấm
+            numPrice = parseFloat(price.replace(/[^0-9.]/g, ""));
         } else {
             numPrice = price;
         }
-        return numPrice.toLocaleString("vi-VN");
+        // Format USD - nếu là số nguyên thì không hiển thị .00
+        if (numPrice % 1 === 0) {
+            return numPrice.toString();
+        }
+        return numPrice.toFixed(2);
     };
 
     const handlePress = () => {
@@ -49,7 +54,7 @@ export default function ChatProductCard({ product }: ChatProductCardProps) {
                 </Text>
 
                 <View style={styles.footer}>
-                    <Text style={styles.price}>{formatPrice(product.price)}₫</Text>
+                    <Text style={styles.price}>${formatPrice(product.price)}</Text>
                     <View style={styles.arrowButton}>
                         <Ionicons name="arrow-forward" size={16} color="#5B9EE1" />
                     </View>
