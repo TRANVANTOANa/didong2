@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Dimensions,
     Image,
     ScaledSize,
@@ -12,6 +14,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { auth, db } from '../../firebase/firebaseConfig';
 
 interface MenuItem {
     id: number;
@@ -21,11 +24,22 @@ interface MenuItem {
     onPress: () => void;
 }
 
+interface UserProfile {
+    name: string;
+    email: string;
+    phone: string;
+    avatarUrl: string;
+}
+
 export default function ProfileScreen(): React.JSX.Element {
     const router = useRouter();
     const [dimensions, setDimensions] = useState<ScaledSize>(
         Dimensions.get('window')
     );
+
+    // User data from Firebase
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const subscription = Dimensions.addEventListener('change', ({
@@ -38,6 +52,50 @@ export default function ProfileScreen(): React.JSX.Element {
 
         return () => subscription?.remove();
     }, []);
+
+    // Load user profile from Firebase
+    const loadUserProfile = useCallback(async () => {
+        try {
+            const user = auth.currentUser;
+            if (!user) {
+                setIsLoading(false);
+                return;
+            }
+
+            // Get from Firestore
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                setUserProfile({
+                    name: data.name || user.displayName || "Chưa cập nhật",
+                    email: data.email || user.email || "",
+                    phone: data.phone || "Chưa cập nhật",
+                    avatarUrl: data.avatarUrl || "",
+                });
+            } else {
+                // Use data from Auth if no Firestore document
+                setUserProfile({
+                    name: user.displayName || "Chưa cập nhật",
+                    email: user.email || "",
+                    phone: "Chưa cập nhật",
+                    avatarUrl: "",
+                });
+            }
+        } catch (error) {
+            console.error("Error loading profile:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    // Reload profile when screen is focused (after editing)
+    useFocusEffect(
+        useCallback(() => {
+            loadUserProfile();
+        }, [loadUserProfile])
+    );
 
     const { width, height } = dimensions;
 
@@ -102,12 +160,47 @@ export default function ProfileScreen(): React.JSX.Element {
     ];
 
     const handleLogout = (): void => {
-        console.log('Logout');
-        router.push('/(auth)/login');
+        auth.signOut().then(() => {
+            console.log('Logged out');
+            router.push('/(auth)/login');
+        }).catch((error) => {
+            console.error('Logout error:', error);
+        });
     };
 
     const handleEditProfile = (): void => {
         router.push('/account/edit-profile');
+    };
+
+    // Render avatar based on avatarUrl
+    const renderAvatar = () => {
+        if (userProfile?.avatarUrl) {
+            // Check if it's a base64 string or URL
+            return (
+                <Image
+                    source={{ uri: userProfile.avatarUrl }}
+                    style={[
+                        styles.avatar,
+                        { width: width * 0.22, height: width * 0.22 },
+                    ]}
+                    onError={() => {
+                        // If image fails to load, update profile to remove broken URL
+                        setUserProfile(prev => prev ? { ...prev, avatarUrl: "" } : null);
+                    }}
+                />
+            );
+        }
+
+        // Default placeholder
+        return (
+            <View style={[
+                styles.avatar,
+                styles.avatarPlaceholder,
+                { width: width * 0.22, height: width * 0.22 },
+            ]}>
+                <Ionicons name="person" size={40} color="#94A3B8" />
+            </View>
+        );
     };
 
     return (
@@ -127,28 +220,44 @@ export default function ProfileScreen(): React.JSX.Element {
                 {/* User Info Card */}
                 <View style={[styles.userCard, { marginHorizontal: width * 0.05 }]}>
                     <View style={styles.avatarContainer}>
-                        <Image
-                            source={require('../../assets/images/home/user.png')}
-                            style={[
+                        {isLoading ? (
+                            <View style={[
                                 styles.avatar,
+                                styles.avatarPlaceholder,
                                 { width: width * 0.22, height: width * 0.22 },
-                            ]}
-                        />
-                        <TouchableOpacity style={styles.editAvatarBtn}>
+                            ]}>
+                                <ActivityIndicator size="small" color="#5B9EE1" />
+                            </View>
+                        ) : (
+                            renderAvatar()
+                        )}
+                        <TouchableOpacity
+                            style={styles.editAvatarBtn}
+                            onPress={handleEditProfile}
+                        >
                             <Ionicons name="camera" size={18} color="#FFFFFF" />
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.userInfo}>
-                        <Text style={[styles.userName, { fontSize: width * 0.055 }]}>
-                            Alison Becker
-                        </Text>
-                        <Text style={[styles.userEmail, { fontSize: width * 0.035 }]}>
-                            alisonbecker@gmail.com
-                        </Text>
-                        <Text style={[styles.userPhone, { fontSize: width * 0.035 }]}>
-                            +880 1234-567890
-                        </Text>
+                        {isLoading ? (
+                            <>
+                                <View style={styles.loadingText} />
+                                <View style={[styles.loadingText, { width: '80%' }]} />
+                            </>
+                        ) : (
+                            <>
+                                <Text style={[styles.userName, { fontSize: width * 0.055 }]}>
+                                    {userProfile?.name || "Chưa cập nhật"}
+                                </Text>
+                                <Text style={[styles.userEmail, { fontSize: width * 0.035 }]}>
+                                    {userProfile?.email || ""}
+                                </Text>
+                                <Text style={[styles.userPhone, { fontSize: width * 0.035 }]}>
+                                    {userProfile?.phone || "Chưa cập nhật"}
+                                </Text>
+                            </>
+                        )}
                     </View>
 
                     <TouchableOpacity
@@ -263,6 +372,13 @@ const styles = StyleSheet.create({
         borderRadius: 50,
         backgroundColor: '#E8ECEF',
     },
+    avatarPlaceholder: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#E2E8F0',
+        borderStyle: 'dashed',
+    },
     editAvatarBtn: {
         position: 'absolute',
         bottom: 0,
@@ -291,6 +407,13 @@ const styles = StyleSheet.create({
     },
     userPhone: {
         color: '#778899',
+    },
+    loadingText: {
+        height: 16,
+        backgroundColor: '#E2E8F0',
+        borderRadius: 4,
+        marginBottom: 8,
+        width: '60%',
     },
     editProfileBtn: {
         padding: 8,

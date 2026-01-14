@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cho phép đọc/ghi users
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+    
+    // Cho phép đọc/ghi products (cho demo)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Cho phép lưu chat history
+    // (Tạm thời allow all để test, sau này nên check auth)
+    match /chatHistory/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

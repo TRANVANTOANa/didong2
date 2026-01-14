@@ -125,7 +125,7 @@ export default function ProductList() {
                     image={{ uri: item.imageUrl }} // Changed to imageUrl
                     onPress={() =>
                         router.push({
-                            pathname: "/product/productDetail",
+                            pathname: "/product/[id]",
                             params: { id: item.id },
                         })
                     }

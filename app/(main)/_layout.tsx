@@ -17,13 +17,8 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Products */}
-      <Tabs.Screen
-        name="products"
-        options={{
-          title: "Products",
-        }}
-      />
+      {/* AI Chat - Thay thế Products */}
+      <Tabs.Screen name="aichat" options={{ title: "AI Chat" }} />
 
       {/* Cart - Center with special styling */}
       <Tabs.Screen

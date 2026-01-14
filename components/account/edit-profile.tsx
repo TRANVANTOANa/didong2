@@ -2,8 +2,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import React, { useEffect, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     Image,
     KeyboardAvoidingView,
@@ -15,14 +18,98 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { auth, db, storage } from "../../firebase/firebaseConfig";
+
+// Interface cho profile data
+interface UserProfile {
+    name: string;
+    email: string;
+    phone: string;
+    dateOfBirth: string;
+    gender: string;
+    avatarUrl: string;
+    updatedAt?: any;
+    createdAt?: any;
+}
 
 export default function EditProfileScreen() {
     const router = useRouter();
-    const [name, setName] = useState("Alison Becker");
-    const [email, setEmail] = useState("alisonbecker@gmail.com");
-    const [phone, setPhone] = useState("+880 1234-567890");
+    const [name, setName] = useState("");
+    const [email, setEmail] = useState("");
+    const [phone, setPhone] = useState("");
+    const [dateOfBirth, setDateOfBirth] = useState("");
+    const [gender, setGender] = useState("");
     const [avatar, setAvatar] = useState<string | null>(null);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // 📦 Load profile từ Firebase khi mở screen
+    useEffect(() => {
+        loadUserProfile();
+    }, []);
+
+    const loadUserProfile = async () => {
+        try {
+            const user = auth.currentUser;
+            if (!user) {
+                Alert.alert("Lỗi", "Vui lòng đăng nhập để xem hồ sơ");
+                router.back();
+                return;
+            }
+
+            // Lấy email từ Firebase Auth
+            setEmail(user.email || "");
+
+            // Lấy profile từ Firestore
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+                const data = userDoc.data() as UserProfile;
+                setName(data.name || user.displayName || "");
+                setPhone(data.phone || "");
+                setDateOfBirth(data.dateOfBirth || "");
+                setGender(data.gender || "");
+                if (data.avatarUrl) {
+                    setAvatarUrl(data.avatarUrl);
+                }
+            } else {
+                // Nếu chưa có profile, dùng displayName từ Auth
+                setName(user.displayName || "");
+            }
+        } catch (error) {
+            console.error("Error loading profile:", error);
+            Alert.alert("Lỗi", "Không thể tải thông tin hồ sơ");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // 📤 Upload avatar lên Firebase Storage
+    const uploadAvatar = async (uri: string): Promise<string | null> => {
+        try {
+            const user = auth.currentUser;
+            if (!user) return null;
+
+            // Fetch image blob
+            const response = await fetch(uri);
+            const blob = await response.blob();
+
+            // Tạo reference cho file
+            const avatarRef = ref(storage, `avatars/${user.uid}/profile.jpg`);
+
+            // Upload file
+            await uploadBytes(avatarRef, blob);
+
+            // Lấy URL download
+            const downloadUrl = await getDownloadURL(avatarRef);
+            return downloadUrl;
+        } catch (error) {
+            console.error("Error uploading avatar:", error);
+            return null;
+        }
+    };
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -75,7 +162,8 @@ export default function EditProfileScreen() {
         ]);
     };
 
-    const handleSave = () => {
+    // 💾 Lưu profile vào Firebase
+    const handleSave = async () => {
         if (!name.trim()) {
             Alert.alert("Error", "Name cannot be empty");
             return;
@@ -84,20 +172,69 @@ export default function EditProfileScreen() {
             Alert.alert("Error", "Please enter a valid email");
             return;
         }
-        if (!phone.trim()) {
-            Alert.alert("Error", "Phone number cannot be empty");
-            return;
-        }
 
-        setIsSaving(true);
-        // Simulate API call
-        setTimeout(() => {
-            setIsSaving(false);
-            Alert.alert("Success", "Profile updated successfully!", [
+        try {
+            setIsSaving(true);
+            const user = auth.currentUser;
+
+            if (!user) {
+                Alert.alert("Lỗi", "Vui lòng đăng nhập lại");
+                return;
+            }
+
+            let finalAvatarUrl = avatarUrl;
+
+            // Nếu có avatar mới được chọn, upload lên Storage
+            if (avatar) {
+                const uploadedUrl = await uploadAvatar(avatar);
+                if (uploadedUrl) {
+                    finalAvatarUrl = uploadedUrl;
+                }
+            }
+
+            // Chuẩn bị data để lưu
+            const profileData: UserProfile = {
+                name: name.trim(),
+                email: email.trim(),
+                phone: phone.trim(),
+                dateOfBirth: dateOfBirth,
+                gender: gender,
+                avatarUrl: finalAvatarUrl || "",
+                updatedAt: serverTimestamp(),
+            };
+
+            // Kiểm tra xem document đã tồn tại chưa
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+                // Nếu chưa có, thêm createdAt
+                profileData.createdAt = serverTimestamp();
+            }
+
+            // Lưu vào Firestore
+            await setDoc(userDocRef, profileData, { merge: true });
+
+            Alert.alert("Thành công", "Hồ sơ đã được cập nhật!", [
                 { text: "OK", onPress: () => router.back() },
             ]);
-        }, 1000);
+        } catch (error) {
+            console.error("Error saving profile:", error);
+            Alert.alert("Lỗi", "Không thể lưu thông tin. Vui lòng thử lại.");
+        } finally {
+            setIsSaving(false);
+        }
     };
+
+    // Loading state
+    if (isLoading) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color="#5B9EE1" />
+                <Text style={styles.loadingText}>Đang tải thông tin...</Text>
+            </View>
+        );
+    }
 
     return (
         <KeyboardAvoidingView
@@ -122,6 +259,8 @@ export default function EditProfileScreen() {
                     <TouchableOpacity style={styles.avatarContainer} onPress={showImageOptions}>
                         {avatar ? (
                             <Image source={{ uri: avatar }} style={styles.avatar} />
+                        ) : avatarUrl ? (
+                            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
                         ) : (
                             <Image
                                 source={require("../../assets/images/home/user.png")}
@@ -355,5 +494,14 @@ const styles = StyleSheet.create({
         color: "#FFF",
         fontSize: 16,
         fontWeight: "600",
+    },
+    loadingContainer: {
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 16,
+        color: "#64748B",
     },
 });

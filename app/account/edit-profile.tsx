@@ -2,11 +2,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     Image,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -15,14 +19,214 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { auth, db, storage } from "../../firebase/firebaseConfig";
+
+// Interface cho profile data
+interface UserProfile {
+    name: string;
+    email: string;
+    phone: string;
+    dateOfBirth: string;
+    gender: string;
+    avatarUrl: string;
+    updatedAt?: any;
+    createdAt?: any;
+}
+
+const GENDER_OPTIONS = ["Nam", "Nữ", "Khác"];
+
+// Generate arrays for date picker
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+const MONTHS = [
+    { value: 0, label: "Tháng 1" },
+    { value: 1, label: "Tháng 2" },
+    { value: 2, label: "Tháng 3" },
+    { value: 3, label: "Tháng 4" },
+    { value: 4, label: "Tháng 5" },
+    { value: 5, label: "Tháng 6" },
+    { value: 6, label: "Tháng 7" },
+    { value: 7, label: "Tháng 8" },
+    { value: 8, label: "Tháng 9" },
+    { value: 9, label: "Tháng 10" },
+    { value: 10, label: "Tháng 11" },
+    { value: 11, label: "Tháng 12" },
+];
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 100 }, (_, i) => currentYear - i);
 
 export default function EditProfileScreen() {
     const router = useRouter();
-    const [name, setName] = useState("Alison Becker");
-    const [email, setEmail] = useState("alisonbecker@gmail.com");
-    const [phone, setPhone] = useState("+880 1234-567890");
+    const [name, setName] = useState("");
+    const [email, setEmail] = useState("");
+    const [phone, setPhone] = useState("");
+    const [dateOfBirth, setDateOfBirth] = useState<Date | null>(null);
+    const [gender, setGender] = useState("");
     const [avatar, setAvatar] = useState<string | null>(null);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Modal states
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showGenderPicker, setShowGenderPicker] = useState(false);
+
+    // Temp date selection state
+    const [selectedDay, setSelectedDay] = useState(1);
+    const [selectedMonth, setSelectedMonth] = useState(0);
+    const [selectedYear, setSelectedYear] = useState(currentYear - 20);
+    const [dateStep, setDateStep] = useState<'day' | 'month' | 'year'>('day');
+
+    // Validation state - hiển thị warning khi thiếu thông tin
+    const [showValidation, setShowValidation] = useState(false);
+
+    // Prevent multiple loads
+    const hasLoaded = useRef(false);
+
+    // 📦 Load profile từ Firebase khi mở screen
+    const loadUserProfile = useCallback(async () => {
+        if (hasLoaded.current) return;
+        hasLoaded.current = true;
+
+        try {
+            const user = auth.currentUser;
+            if (!user) {
+                Alert.alert("Lỗi", "Vui lòng đăng nhập để xem hồ sơ");
+                router.back();
+                return;
+            }
+
+            // Lấy email từ Firebase Auth
+            setEmail(user.email || "");
+
+            // Lấy profile từ Firestore
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+                const data = userDoc.data() as UserProfile;
+                setName(data.name || user.displayName || "");
+                setPhone(data.phone || "");
+                setGender(data.gender || "");
+                if (data.dateOfBirth) {
+                    const date = new Date(data.dateOfBirth);
+                    setDateOfBirth(date);
+                    setSelectedDay(date.getDate());
+                    setSelectedMonth(date.getMonth());
+                    setSelectedYear(date.getFullYear());
+                }
+                if (data.avatarUrl) {
+                    setAvatarUrl(data.avatarUrl);
+                }
+            } else {
+                // Nếu chưa có profile, dùng displayName từ Auth
+                setName(user.displayName || "");
+            }
+        } catch (error) {
+            console.error("Error loading profile:", error);
+            Alert.alert("Lỗi", "Không thể tải thông tin hồ sơ");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [router]);
+
+    useEffect(() => {
+        loadUserProfile();
+    }, [loadUserProfile]);
+
+    // 📤 Resize và nén ảnh trước khi chuyển base64 (cho web)
+    const imageToBase64 = async (uri: string): Promise<string | null> => {
+        try {
+            return new Promise((resolve, reject) => {
+                const img = document.createElement('img');
+                img.crossOrigin = 'anonymous';
+
+                img.onload = () => {
+                    // Resize ảnh xuống max 300x300 để giảm kích thước
+                    const maxSize = 300;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxSize) {
+                            height = Math.round((height * maxSize) / width);
+                            width = maxSize;
+                        }
+                    } else {
+                        if (height > maxSize) {
+                            width = Math.round((width * maxSize) / height);
+                            height = maxSize;
+                        }
+                    }
+
+                    // Vẽ ảnh đã resize lên canvas
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('Could not get canvas context'));
+                        return;
+                    }
+
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Chuyển thành base64 với chất lượng 0.7 (70%)
+                    const base64 = canvas.toDataURL('image/jpeg', 0.7);
+                    console.log('Compressed image size:', Math.round(base64.length / 1024), 'KB');
+                    resolve(base64);
+                };
+
+                img.onerror = () => {
+                    reject(new Error('Failed to load image'));
+                };
+
+                img.src = uri;
+            });
+        } catch (error) {
+            console.error("Error converting to base64:", error);
+            return null;
+        }
+    };
+
+    // 📤 Upload avatar lên Firebase Storage hoặc chuyển thành base64 cho web
+    const uploadAvatar = async (uri: string): Promise<string | null> => {
+        try {
+            const user = auth.currentUser;
+            if (!user) return null;
+
+            // Trên web, chuyển thành base64 và lưu trực tiếp vào Firestore
+            if (Platform.OS === "web") {
+                console.log("Web platform: Converting image to base64...");
+                const base64 = await imageToBase64(uri);
+                if (base64) {
+                    console.log("Image converted to base64 successfully");
+                    return base64;
+                }
+                return null;
+            }
+
+            // Trên mobile, upload lên Storage như bình thường
+            // Fetch image blob
+            const response = await fetch(uri);
+            const blob = await response.blob();
+
+            // Tạo reference cho file với timestamp để tránh cache
+            const timestamp = Date.now();
+            const avatarRef = ref(storage, `avatars/${user.uid}/profile_${timestamp}.jpg`);
+
+            // Upload file
+            await uploadBytes(avatarRef, blob);
+
+            // Lấy URL download
+            const downloadUrl = await getDownloadURL(avatarRef);
+            console.log("Avatar uploaded successfully:", downloadUrl);
+            return downloadUrl;
+        } catch (error: any) {
+            console.error("Error uploading avatar:", error);
+            return null;
+        }
+    };
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -35,7 +239,7 @@ export default function EditProfileScreen() {
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
@@ -68,35 +272,221 @@ export default function EditProfileScreen() {
     };
 
     const showImageOptions = () => {
-        Alert.alert("Change Avatar", "Choose an option", [
-            { text: "Take Photo", onPress: takePhoto },
-            { text: "Choose from Library", onPress: pickImage },
-            { text: "Cancel", style: "cancel" },
-        ]);
+        if (Platform.OS === "web") {
+            // On web, directly open file picker
+            pickImage();
+        } else {
+            Alert.alert("Change Avatar", "Choose an option", [
+                { text: "Take Photo", onPress: takePhoto },
+                { text: "Choose from Library", onPress: pickImage },
+                { text: "Cancel", style: "cancel" },
+            ]);
+        }
     };
 
-    const handleSave = () => {
-        if (!name.trim()) {
-            Alert.alert("Error", "Name cannot be empty");
-            return;
+    // Open date picker
+    const openDatePicker = () => {
+        if (dateOfBirth) {
+            setSelectedDay(dateOfBirth.getDate());
+            setSelectedMonth(dateOfBirth.getMonth());
+            setSelectedYear(dateOfBirth.getFullYear());
         }
+        setDateStep('day');
+        setShowDatePicker(true);
+    };
+
+    // Confirm date selection
+    const confirmDateSelection = () => {
+        const newDate = new Date(selectedYear, selectedMonth, selectedDay);
+        setDateOfBirth(newDate);
+        setShowDatePicker(false);
+    };
+
+    // Format date for display
+    const formatDate = (date: Date | null): string => {
+        if (!date) return "";
+        return date.toLocaleDateString("vi-VN", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+        });
+    };
+
+    // 💾 Lưu profile vào Firebase
+    const handleSave = async () => {
+        // Bật validation để hiển thị warning
+        setShowValidation(true);
+
+        // Vẫn cho lưu dù thiếu thông tin, chỉ cần có email hợp lệ từ Auth
         if (!email.trim() || !email.includes("@")) {
-            Alert.alert("Error", "Please enter a valid email");
-            return;
-        }
-        if (!phone.trim()) {
-            Alert.alert("Error", "Phone number cannot be empty");
+            Alert.alert("Lỗi", "Email không hợp lệ");
             return;
         }
 
-        setIsSaving(true);
-        // Simulate API call
-        setTimeout(() => {
+        try {
+            setIsSaving(true);
+            const user = auth.currentUser;
+
+            if (!user) {
+                Alert.alert("Lỗi", "Vui lòng đăng nhập lại");
+                return;
+            }
+
+            let finalAvatarUrl = avatarUrl || "";
+            let avatarUploadFailed = false;
+
+            // Nếu có avatar mới được chọn, thử upload lên Storage
+            if (avatar) {
+                console.log("Attempting to upload avatar...");
+                const uploadedUrl = await uploadAvatar(avatar);
+                if (uploadedUrl) {
+                    finalAvatarUrl = uploadedUrl;
+                } else {
+                    avatarUploadFailed = true;
+                    console.log("Avatar upload failed, continuing with other data...");
+                }
+            }
+
+            // Chuẩn bị data để lưu
+            const profileData: UserProfile = {
+                name: name.trim(),
+                email: email.trim(),
+                phone: phone.trim(),
+                dateOfBirth: dateOfBirth ? dateOfBirth.toISOString() : "",
+                gender: gender,
+                avatarUrl: finalAvatarUrl,
+                updatedAt: serverTimestamp(),
+            };
+
+            // Kiểm tra xem document đã tồn tại chưa
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+                // Nếu chưa có, thêm createdAt
+                profileData.createdAt = serverTimestamp();
+            }
+
+            // Lưu vào Firestore
+            await setDoc(userDocRef, profileData, { merge: true });
+
+            // Thông báo kết quả
+            if (avatarUploadFailed) {
+                Alert.alert(
+                    "Đã lưu một phần",
+                    "Thông tin hồ sơ đã được lưu, nhưng ảnh đại diện không thể upload trên web. Hãy thử trên ứng dụng di động để upload ảnh.",
+                    [{ text: "OK", onPress: () => router.back() }]
+                );
+            } else {
+                Alert.alert("Thành công", "Hồ sơ đã được cập nhật!", [
+                    { text: "OK", onPress: () => router.back() },
+                ]);
+            }
+        } catch (error) {
+            console.error("Error saving profile:", error);
+            Alert.alert("Lỗi", "Không thể lưu thông tin. Vui lòng thử lại.");
+        } finally {
             setIsSaving(false);
-            Alert.alert("Success", "Profile updated successfully!", [
-                { text: "OK", onPress: () => router.back() },
-            ]);
-        }, 1000);
+        }
+    };
+
+    // Loading state
+    if (isLoading) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color="#5B9EE1" />
+                <Text style={styles.loadingText}>Đang tải thông tin...</Text>
+            </View>
+        );
+    }
+
+    // Render date step content
+    const renderDateStepContent = () => {
+        switch (dateStep) {
+            case 'day':
+                return (
+                    <View style={styles.dateGrid}>
+                        {DAYS.map((day) => (
+                            <TouchableOpacity
+                                key={day}
+                                style={[
+                                    styles.dateGridItem,
+                                    selectedDay === day && styles.dateGridItemSelected,
+                                ]}
+                                onPress={() => {
+                                    setSelectedDay(day);
+                                    setDateStep('month');
+                                }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.dateGridText,
+                                        selectedDay === day && styles.dateGridTextSelected,
+                                    ]}
+                                >
+                                    {day}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                );
+            case 'month':
+                return (
+                    <View style={styles.monthGrid}>
+                        {MONTHS.map((month) => (
+                            <TouchableOpacity
+                                key={month.value}
+                                style={[
+                                    styles.monthGridItem,
+                                    selectedMonth === month.value && styles.monthGridItemSelected,
+                                ]}
+                                onPress={() => {
+                                    setSelectedMonth(month.value);
+                                    setDateStep('year');
+                                }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.monthGridText,
+                                        selectedMonth === month.value && styles.monthGridTextSelected,
+                                    ]}
+                                >
+                                    {month.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                );
+            case 'year':
+                return (
+                    <ScrollView style={styles.yearScroll} showsVerticalScrollIndicator={false}>
+                        {YEARS.map((year) => (
+                            <TouchableOpacity
+                                key={year}
+                                style={[
+                                    styles.yearItem,
+                                    selectedYear === year && styles.yearItemSelected,
+                                ]}
+                                onPress={() => {
+                                    setSelectedYear(year);
+                                }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.yearText,
+                                        selectedYear === year && styles.yearTextSelected,
+                                    ]}
+                                >
+                                    {year}
+                                </Text>
+                                {selectedYear === year && (
+                                    <Ionicons name="checkmark-circle" size={24} color="#5B9EE1" />
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                );
+        }
     };
 
     return (
@@ -122,11 +512,16 @@ export default function EditProfileScreen() {
                     <TouchableOpacity style={styles.avatarContainer} onPress={showImageOptions}>
                         {avatar ? (
                             <Image source={{ uri: avatar }} style={styles.avatar} />
-                        ) : (
+                        ) : avatarUrl ? (
                             <Image
-                                source={require("../../assets/images/home/user.png")}
+                                source={{ uri: avatarUrl }}
                                 style={styles.avatar}
+                                onError={() => setAvatarUrl(null)}
                             />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Ionicons name="person" size={50} color="#94A3B8" />
+                            </View>
                         )}
                         <View style={styles.editAvatarBtn}>
                             <Ionicons name="camera" size={18} color="#FFFFFF" />
@@ -138,9 +533,9 @@ export default function EditProfileScreen() {
                 {/* Form */}
                 <View style={styles.formCard}>
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Full Name</Text>
-                        <View style={styles.inputWrapper}>
-                            <Ionicons name="person-outline" size={20} color="#94A3B8" />
+                        <Text style={styles.label}>Full Name {showValidation && !name.trim() && <Text style={styles.requiredStar}>*</Text>}</Text>
+                        <View style={[styles.inputWrapper, showValidation && !name.trim() && styles.inputWrapperError]}>
+                            <Ionicons name="person-outline" size={20} color={showValidation && !name.trim() ? "#EF4444" : "#94A3B8"} />
                             <TextInput
                                 style={styles.input}
                                 value={name}
@@ -149,6 +544,9 @@ export default function EditProfileScreen() {
                                 placeholderTextColor="#94A3B8"
                             />
                         </View>
+                        {showValidation && !name.trim() && (
+                            <Text style={styles.errorText}>Vui lòng nhập họ tên</Text>
+                        )}
                     </View>
 
                     <View style={styles.inputGroup}>
@@ -168,9 +566,9 @@ export default function EditProfileScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Phone Number</Text>
-                        <View style={styles.inputWrapper}>
-                            <Ionicons name="call-outline" size={20} color="#94A3B8" />
+                        <Text style={styles.label}>Phone Number {showValidation && !phone.trim() && <Text style={styles.requiredStar}>*</Text>}</Text>
+                        <View style={[styles.inputWrapper, showValidation && !phone.trim() && styles.inputWrapperError]}>
+                            <Ionicons name="call-outline" size={20} color={showValidation && !phone.trim() ? "#EF4444" : "#94A3B8"} />
                             <TextInput
                                 style={styles.input}
                                 value={phone}
@@ -180,24 +578,47 @@ export default function EditProfileScreen() {
                                 keyboardType="phone-pad"
                             />
                         </View>
+                        {showValidation && !phone.trim() && (
+                            <Text style={styles.errorText}>Vui lòng nhập số điện thoại</Text>
+                        )}
                     </View>
 
+                    {/* Date of Birth - Clickable */}
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Date of Birth</Text>
-                        <TouchableOpacity style={styles.inputWrapper}>
-                            <Ionicons name="calendar-outline" size={20} color="#94A3B8" />
-                            <Text style={styles.placeholderText}>Select date of birth</Text>
-                            <Ionicons name="chevron-down" size={20} color="#94A3B8" />
+                        <Text style={styles.label}>Date of Birth {showValidation && !dateOfBirth && <Text style={styles.requiredStar}>*</Text>}</Text>
+                        <TouchableOpacity
+                            style={[styles.inputWrapper, showValidation && !dateOfBirth && styles.inputWrapperError]}
+                            onPress={openDatePicker}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="calendar-outline" size={20} color={showValidation && !dateOfBirth ? "#EF4444" : "#94A3B8"} />
+                            <Text style={dateOfBirth ? styles.inputText : styles.placeholderText}>
+                                {dateOfBirth ? formatDate(dateOfBirth) : "Select date of birth"}
+                            </Text>
+                            <Ionicons name="chevron-down" size={20} color={showValidation && !dateOfBirth ? "#EF4444" : "#94A3B8"} />
                         </TouchableOpacity>
+                        {showValidation && !dateOfBirth && (
+                            <Text style={styles.errorText}>Vui lòng chọn ngày sinh</Text>
+                        )}
                     </View>
 
+                    {/* Gender - Clickable */}
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Gender</Text>
-                        <TouchableOpacity style={styles.inputWrapper}>
-                            <Ionicons name="transgender-outline" size={20} color="#94A3B8" />
-                            <Text style={styles.placeholderText}>Select gender</Text>
-                            <Ionicons name="chevron-down" size={20} color="#94A3B8" />
+                        <Text style={styles.label}>Gender {showValidation && !gender && <Text style={styles.requiredStar}>*</Text>}</Text>
+                        <TouchableOpacity
+                            style={[styles.inputWrapper, showValidation && !gender && styles.inputWrapperError]}
+                            onPress={() => setShowGenderPicker(true)}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="transgender-outline" size={20} color={showValidation && !gender ? "#EF4444" : "#94A3B8"} />
+                            <Text style={gender ? styles.inputText : styles.placeholderText}>
+                                {gender || "Select gender"}
+                            </Text>
+                            <Ionicons name="chevron-down" size={20} color={showValidation && !gender ? "#EF4444" : "#94A3B8"} />
                         </TouchableOpacity>
+                        {showValidation && !gender && (
+                            <Text style={styles.errorText}>Vui lòng chọn giới tính</Text>
+                        )}
                     </View>
                 </View>
 
@@ -208,7 +629,10 @@ export default function EditProfileScreen() {
                     disabled={isSaving}
                 >
                     {isSaving ? (
-                        <Text style={styles.saveText}>Saving...</Text>
+                        <>
+                            <ActivityIndicator size="small" color="#FFF" />
+                            <Text style={styles.saveText}>Đang lưu...</Text>
+                        </>
                     ) : (
                         <>
                             <Ionicons name="checkmark-circle-outline" size={22} color="#FFF" />
@@ -217,6 +641,125 @@ export default function EditProfileScreen() {
                     )}
                 </TouchableOpacity>
             </ScrollView>
+
+            {/* Custom Date Picker Modal */}
+            <Modal
+                visible={showDatePicker}
+                transparent
+                animationType="slide"
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowDatePicker(false)}
+                >
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.dateModalContent}
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                <Text style={styles.modalCancelText}>Hủy</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.modalTitle}>
+                                {dateStep === 'day' ? 'Chọn ngày' :
+                                    dateStep === 'month' ? 'Chọn tháng' : 'Chọn năm'}
+                            </Text>
+                            {dateStep === 'year' ? (
+                                <TouchableOpacity onPress={confirmDateSelection}>
+                                    <Text style={styles.modalConfirmText}>Xong</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <View style={{ width: 50 }} />
+                            )}
+                        </View>
+
+                        {/* Date step indicators */}
+                        <View style={styles.dateStepIndicator}>
+                            <TouchableOpacity
+                                style={[styles.stepDot, dateStep === 'day' && styles.stepDotActive]}
+                                onPress={() => setDateStep('day')}
+                            >
+                                <Text style={[styles.stepText, dateStep === 'day' && styles.stepTextActive]}>
+                                    {selectedDay}
+                                </Text>
+                            </TouchableOpacity>
+                            <Text style={styles.stepSeparator}>/</Text>
+                            <TouchableOpacity
+                                style={[styles.stepDot, dateStep === 'month' && styles.stepDotActive]}
+                                onPress={() => setDateStep('month')}
+                            >
+                                <Text style={[styles.stepText, dateStep === 'month' && styles.stepTextActive]}>
+                                    {selectedMonth + 1}
+                                </Text>
+                            </TouchableOpacity>
+                            <Text style={styles.stepSeparator}>/</Text>
+                            <TouchableOpacity
+                                style={[styles.stepDot, dateStep === 'year' && styles.stepDotActive]}
+                                onPress={() => setDateStep('year')}
+                            >
+                                <Text style={[styles.stepText, dateStep === 'year' && styles.stepTextActive]}>
+                                    {selectedYear}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {renderDateStepContent()}
+                    </TouchableOpacity>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* Gender Picker Modal */}
+            <Modal
+                visible={showGenderPicker}
+                transparent
+                animationType="slide"
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowGenderPicker(false)}
+                >
+                    <View style={styles.genderModalContent}>
+                        <View style={styles.genderModalHeader}>
+                            <View style={styles.modalHandle} />
+                        </View>
+                        <Text style={styles.genderModalTitle}>Chọn giới tính</Text>
+                        {GENDER_OPTIONS.map((option) => (
+                            <TouchableOpacity
+                                key={option}
+                                style={[
+                                    styles.genderOption,
+                                    gender === option && styles.genderOptionSelected,
+                                ]}
+                                onPress={() => {
+                                    setGender(option);
+                                    setShowGenderPicker(false);
+                                }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.genderOptionText,
+                                        gender === option && styles.genderOptionTextSelected,
+                                    ]}
+                                >
+                                    {option}
+                                </Text>
+                                {gender === option && (
+                                    <Ionicons name="checkmark-circle" size={24} color="#5B9EE1" />
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => setShowGenderPicker(false)}
+                        >
+                            <Text style={styles.cancelButtonText}>Hủy</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
@@ -269,6 +812,13 @@ const styles = StyleSheet.create({
         height: 120,
         borderRadius: 60,
         backgroundColor: "#E8ECEF",
+    },
+    avatarPlaceholder: {
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 2,
+        borderColor: "#E2E8F0",
+        borderStyle: "dashed",
     },
     editAvatarBtn: {
         position: "absolute",
@@ -328,10 +878,31 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: "#0F172A",
     },
+    inputText: {
+        flex: 1,
+        fontSize: 15,
+        color: "#0F172A",
+    },
     placeholderText: {
         flex: 1,
         fontSize: 15,
         color: "#94A3B8",
+    },
+    // Validation styles
+    inputWrapperError: {
+        borderColor: "#EF4444",
+        borderWidth: 1.5,
+        backgroundColor: "#FEF2F2",
+    },
+    errorText: {
+        fontSize: 12,
+        color: "#EF4444",
+        marginTop: 4,
+        marginLeft: 4,
+    },
+    requiredStar: {
+        color: "#EF4444",
+        fontWeight: "700",
     },
     saveBtn: {
         flexDirection: "row",
@@ -355,5 +926,219 @@ const styles = StyleSheet.create({
         color: "#FFF",
         fontSize: 16,
         fontWeight: "600",
+    },
+    loadingContainer: {
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 16,
+        color: "#64748B",
+    },
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "flex-end",
+    },
+    dateModalContent: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingBottom: 30,
+        maxHeight: "70%",
+    },
+    modalHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E2E8F0",
+    },
+    modalTitle: {
+        fontSize: 17,
+        fontWeight: "600",
+        color: "#0F172A",
+    },
+    modalCancelText: {
+        fontSize: 16,
+        color: "#64748B",
+    },
+    modalConfirmText: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#5B9EE1",
+    },
+    // Date step indicator
+    dateStepIndicator: {
+        flexDirection: "row",
+        justifyContent: "center",
+        alignItems: "center",
+        paddingVertical: 16,
+        gap: 8,
+    },
+    stepDot: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: "#F1F5F9",
+    },
+    stepDotActive: {
+        backgroundColor: "#5B9EE1",
+    },
+    stepText: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#64748B",
+    },
+    stepTextActive: {
+        color: "#FFFFFF",
+    },
+    stepSeparator: {
+        fontSize: 18,
+        color: "#94A3B8",
+    },
+    // Date grid
+    dateGrid: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        paddingHorizontal: 16,
+        justifyContent: "center",
+        gap: 8,
+    },
+    dateGridItem: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#F1F5F9",
+    },
+    dateGridItemSelected: {
+        backgroundColor: "#5B9EE1",
+    },
+    dateGridText: {
+        fontSize: 16,
+        fontWeight: "500",
+        color: "#0F172A",
+    },
+    dateGridTextSelected: {
+        color: "#FFFFFF",
+    },
+    // Month grid
+    monthGrid: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        paddingHorizontal: 16,
+        justifyContent: "center",
+        gap: 8,
+    },
+    monthGridItem: {
+        width: "30%",
+        paddingVertical: 14,
+        borderRadius: 12,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#F1F5F9",
+    },
+    monthGridItemSelected: {
+        backgroundColor: "#5B9EE1",
+    },
+    monthGridText: {
+        fontSize: 14,
+        fontWeight: "500",
+        color: "#0F172A",
+    },
+    monthGridTextSelected: {
+        color: "#FFFFFF",
+    },
+    // Year scroll
+    yearScroll: {
+        maxHeight: 300,
+        paddingHorizontal: 20,
+    },
+    yearItem: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        marginBottom: 8,
+        backgroundColor: "#F8FAFC",
+    },
+    yearItemSelected: {
+        backgroundColor: "#EBF5FF",
+        borderWidth: 1,
+        borderColor: "#5B9EE1",
+    },
+    yearText: {
+        fontSize: 16,
+        color: "#0F172A",
+    },
+    yearTextSelected: {
+        fontWeight: "600",
+        color: "#5B9EE1",
+    },
+    // Gender modal styles
+    genderModalContent: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingHorizontal: 20,
+        paddingBottom: 40,
+    },
+    genderModalHeader: {
+        alignItems: "center",
+        paddingVertical: 12,
+    },
+    modalHandle: {
+        width: 40,
+        height: 4,
+        backgroundColor: "#E2E8F0",
+        borderRadius: 2,
+    },
+    genderModalTitle: {
+        fontSize: 18,
+        fontWeight: "700",
+        color: "#0F172A",
+        textAlign: "center",
+        marginVertical: 16,
+    },
+    genderOption: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        marginBottom: 8,
+        backgroundColor: "#F8FAFC",
+    },
+    genderOptionSelected: {
+        backgroundColor: "#EBF5FF",
+        borderWidth: 1,
+        borderColor: "#5B9EE1",
+    },
+    genderOptionText: {
+        fontSize: 16,
+        color: "#0F172A",
+    },
+    genderOptionTextSelected: {
+        fontWeight: "600",
+        color: "#5B9EE1",
+    },
+    cancelButton: {
+        marginTop: 12,
+        paddingVertical: 16,
+        alignItems: "center",
+    },
+    cancelButtonText: {
+        fontSize: 16,
+        color: "#64748B",
+        fontWeight: "500",
     },
 });

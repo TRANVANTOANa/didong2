@@ -5,7 +5,8 @@ export type CartItem = {
   id: string;      // id sản phẩm
   name: string;
   price: number;   // giá dạng number
-  image: any;
+  image: any;      // Local image for display
+  imageUrl?: string; // Firebase URL for saving to orders
   size: string;    // ví dụ "40"
   qty: number;
 };

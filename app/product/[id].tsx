@@ -221,6 +221,7 @@ export default function ProductDetailScreen() {
                   name: product.name,
                   price: parsePrice(product.price),
                   image: { uri: gallery[0] },
+                  imageUrl: gallery[0] || product.imageUrl, // Firebase image URL for orders
                   size: selectedSize.toString(),
                 });
                 router.push("/cart");

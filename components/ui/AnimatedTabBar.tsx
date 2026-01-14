@@ -16,25 +16,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const INDICATOR_SIZE = 50;
 
 // Map route name to icon
-const ROUTE_ICONS: { [key: string]: keyof typeof Ionicons.glyphMap } = {
-    index: 'home-outline',
-    products: 'bag-handle-outline',
-    cart: 'bag-outline',
-    favorite: 'heart-outline',
-    profile: 'person-outline',
-};
+const ROUTE_ICONS: Record<string, string> = {
+    index: "home-outline",
+    aichat: "chatbubbles-outline",
+    cart: "cart-outline",
+    favorite: "heart-outline",
+    profile: "person-outline",
+} as const;
 
 // Icon khi active (filled icons)
-const ROUTE_ICONS_ACTIVE: { [key: string]: keyof typeof Ionicons.glyphMap } = {
-    index: 'home',
-    products: 'bag-handle',
-    cart: 'bag',
-    favorite: 'heart',
-    profile: 'person',
-};
+const ROUTE_ICONS_ACTIVE: Record<string, string> = {
+    index: "home",
+    aichat: "chatbubbles",
+    cart: "cart",
+    favorite: "heart",
+    profile: "person",
+} as const;
 
 // Các route chính cần hiển thị trên tab bar
-const MAIN_ROUTES = ['index', 'products', 'cart', 'favorite', 'profile'];
+const MAIN_ROUTES = ["index", "aichat", "cart", "favorite", "profile"] as const;
 
 interface AnimatedTabBarProps extends BottomTabBarProps { }
 

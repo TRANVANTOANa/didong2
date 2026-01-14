@@ -30,7 +30,9 @@ export default function CheckoutScreen() {
     const [address, setAddress] = useState("");
     const [paymentMethod, setPaymentMethod] = useState<"cod" | "card">("cod");
 
-    const handlePay = () => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handlePay = async () => {
         if (!fullName.trim()) {
             Alert.alert("Missing Information", "Please enter your full name.");
             return;
@@ -44,16 +46,55 @@ export default function CheckoutScreen() {
             return;
         }
 
-        // Clear cart and navigate to success page
-        clearCart();
-        router.replace({
-            pathname: "/product/order-success",
-            params: {
-                total: total.toFixed(2),
-                name: fullName,
-                itemCount: items.length.toString(),
-            },
-        });
+        setIsSubmitting(true);
+
+        try {
+            // Import and save order to Firebase
+            const { saveOrder } = await import("../../firebase/orders");
+
+            // Convert cart items to order items with imageUrl
+            const orderItems = items.map(item => ({
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                imageUrl: item.imageUrl || "", // Use Firebase image URL
+                size: item.size,
+                qty: item.qty,
+            }));
+
+            const order = await saveOrder({
+                items: orderItems,
+                subtotal,
+                shipping,
+                total,
+                customerName: fullName,
+                phone,
+                address,
+                paymentMethod,
+            });
+
+            console.log("Order saved successfully:", order.orderId);
+
+            // Clear cart and navigate to success page
+            clearCart();
+            router.replace({
+                pathname: "/product/order-success",
+                params: {
+                    total: total.toFixed(2),
+                    name: fullName,
+                    itemCount: items.length.toString(),
+                    orderId: order.orderId,
+                },
+            });
+        } catch (error) {
+            console.error("Error saving order:", error);
+            Alert.alert(
+                "Order Failed",
+                "Could not save your order. Please try again."
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -223,13 +264,20 @@ export default function CheckoutScreen() {
                 <TouchableOpacity
                     style={[
                         styles.payButton,
-                        items.length === 0 && { opacity: 0.5 },
+                        (items.length === 0 || isSubmitting) && { opacity: 0.5 },
                     ]}
-                    disabled={items.length === 0}
+                    disabled={items.length === 0 || isSubmitting}
                     onPress={handlePay}
                 >
-                    <Ionicons name="checkmark-circle-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.payText}>Place Order - ${total.toFixed(2)}</Text>
+                    <Ionicons
+                        name={isSubmitting ? "hourglass-outline" : "checkmark-circle-outline"}
+                        size={22}
+                        color="#FFFFFF"
+                        style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.payText}>
+                        {isSubmitting ? "Processing..." : `Place Order - $${total.toFixed(2)}`}
+                    </Text>
                 </TouchableOpacity>
             </ScrollView>
         </View>

@@ -34,7 +34,7 @@ export default function FavoriteProductsSection() {
                     image={item.image}
                     onPress={() =>
                         router.push({
-                            pathname: "/product/productDetail",
+                            pathname: "/product/[id]",
                             params: { id: item.id },
                         })
                     }

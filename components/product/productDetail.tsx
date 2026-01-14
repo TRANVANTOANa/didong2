@@ -12,8 +12,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import HomeHeader from "../../components/home/HomeHeader";
 import { useCart } from "../../context/CartContext";
+import HomeHeader from "../home/HomeHeader";
+import DrawerMenu from "../ui/DrawerMenu";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -174,165 +175,180 @@ export default function ProductDetailScreen() {
 
   const [selectedSize, setSelectedSize] = useState<number>(40);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+  const [drawerVisible, setDrawerVisible] = useState(false);
 
   // Xử lý trường hợp sản phẩm không tồn tại
   if (!product) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <HomeHeader />
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color="#CBD5E1" />
-          <Text style={styles.errorText}>Product not found</Text>
-          <TouchableOpacity
-            style={styles.backButtonError}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.backButtonErrorText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.screen}>
+        <SafeAreaView style={styles.screen}>
+          <HomeHeader onMenuPress={() => setDrawerVisible(true)} />
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#CBD5E1" />
+            <Text style={styles.errorText}>Product not found</Text>
+            <TouchableOpacity
+              style={styles.backButtonError}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backButtonErrorText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+        <DrawerMenu
+          visible={drawerVisible}
+          onClose={() => setDrawerVisible(false)}
+        />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      {/* Giữ nguyên HomeHeader */}
-      <HomeHeader />
+    <View style={styles.screen}>
+      <SafeAreaView style={styles.screen}>
+        {/* Giữ nguyên HomeHeader */}
+        <HomeHeader onMenuPress={() => setDrawerVisible(true)} />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Back Button & Title Row */}
-        <View style={styles.titleRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="chevron-back" size={20} color="#0F172A" />
-          </TouchableOpacity>
-          <Text style={styles.pageTitle}>Product Details</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        {/* Main Image Card */}
-        <View style={styles.imageCard}>
-          <Text style={styles.categoryLabel}>{product.category} Shoes</Text>
-
-          <View style={styles.imageWrapper}>
-            <Image
-              source={product.gallery[selectedImageIndex]}
-              style={styles.mainImage}
-              resizeMode="contain"
-            />
-          </View>
-
-          {/* Gallery Thumbnails */}
-          <View style={styles.thumbnailRow}>
-            {product.gallery.map((img, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.thumbnailItem,
-                  selectedImageIndex === index && styles.thumbnailItemActive,
-                ]}
-                onPress={() => setSelectedImageIndex(index)}
-              >
-                <Image source={img} style={styles.thumbnailImage} resizeMode="contain" />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Product Info Card */}
-        <View style={styles.infoCard}>
-          {/* Tag Badge */}
-          <View
-            style={[
-              styles.tagBadge,
-              { backgroundColor: getTagColor(product.tag) },
-            ]}
-          >
-            <Text style={styles.tagText}>{product.tag}</Text>
-          </View>
-
-          {/* Name & Price Row */}
-          <View style={styles.namePriceRow}>
-            <Text style={styles.productName}>{product.name}</Text>
-            <Text style={styles.productPrice}>{product.priceBottom}</Text>
-          </View>
-
-          {/* Description */}
-          <Text style={styles.description}>{product.description}</Text>
-
-          {/* Divider */}
-          <View style={styles.divider} />
-
-          {/* Size Section */}
-          <View style={styles.sizeHeader}>
-            <Text style={styles.sectionTitle}>Select Size</Text>
-            <View style={styles.sizeTypeRow}>
-              <Text style={styles.sizeTypeActive}>EU</Text>
-              <Text style={styles.sizeType}>US</Text>
-              <Text style={styles.sizeType}>UK</Text>
-            </View>
-          </View>
-
-          <View style={styles.sizeRow}>
-            {SIZES.map((size) => {
-              const isActive = size === selectedSize;
-              return (
-                <TouchableOpacity
-                  key={size}
-                  style={[styles.sizeItem, isActive && styles.sizeItemActive]}
-                  onPress={() => setSelectedSize(size)}
-                >
-                  <Text
-                    style={[styles.sizeText, isActive && styles.sizeTextActive]}
-                  >
-                    {size}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Divider */}
-          <View style={styles.divider} />
-
-          {/* Bottom: Price & Add to Cart */}
-          <View style={styles.bottomRow}>
-            <View>
-              <Text style={styles.totalLabel}>Total Price</Text>
-              <Text style={styles.totalPrice}>{product.priceBottom}</Text>
-            </View>
-
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Back Button & Title Row */}
+          <View style={styles.titleRow}>
             <TouchableOpacity
-              style={styles.addToCartButton}
-              onPress={() => {
-                addToCart({
-                  id: productId,
-                  name: product.name,
-                  price: parsePrice(product.priceBottom),
-                  image: product.mainImage,
-                  size: selectedSize.toString(),
-                });
-                router.push("/cart");
-              }}
+              style={styles.backButton}
+              onPress={() => router.back()}
             >
-              <Ionicons
-                name="bag-add-outline"
-                size={18}
-                color="#FFFFFF"
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.addToCartText}>Add To Cart</Text>
+              <Ionicons name="chevron-back" size={20} color="#0F172A" />
             </TouchableOpacity>
+            <Text style={styles.pageTitle}>Product Details</Text>
+            <View style={{ width: 40 }} />
           </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+
+          {/* Main Image Card */}
+          <View style={styles.imageCard}>
+            <Text style={styles.categoryLabel}>{product.category} Shoes</Text>
+
+            <View style={styles.imageWrapper}>
+              <Image
+                source={product.gallery[selectedImageIndex]}
+                style={styles.mainImage}
+                resizeMode="contain"
+              />
+            </View>
+
+            {/* Gallery Thumbnails */}
+            <View style={styles.thumbnailRow}>
+              {product.gallery.map((img, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.thumbnailItem,
+                    selectedImageIndex === index && styles.thumbnailItemActive,
+                  ]}
+                  onPress={() => setSelectedImageIndex(index)}
+                >
+                  <Image source={img} style={styles.thumbnailImage} resizeMode="contain" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Product Info Card */}
+          <View style={styles.infoCard}>
+            {/* Tag Badge */}
+            <View
+              style={[
+                styles.tagBadge,
+                { backgroundColor: getTagColor(product.tag) },
+              ]}
+            >
+              <Text style={styles.tagText}>{product.tag}</Text>
+            </View>
+
+            {/* Name & Price Row */}
+            <View style={styles.namePriceRow}>
+              <Text style={styles.productName}>{product.name}</Text>
+              <Text style={styles.productPrice}>{product.priceBottom}</Text>
+            </View>
+
+            {/* Description */}
+            <Text style={styles.description}>{product.description}</Text>
+
+            {/* Divider */}
+            <View style={styles.divider} />
+
+            {/* Size Section */}
+            <View style={styles.sizeHeader}>
+              <Text style={styles.sectionTitle}>Select Size</Text>
+              <View style={styles.sizeTypeRow}>
+                <Text style={styles.sizeTypeActive}>EU</Text>
+                <Text style={styles.sizeType}>US</Text>
+                <Text style={styles.sizeType}>UK</Text>
+              </View>
+            </View>
+
+            <View style={styles.sizeRow}>
+              {SIZES.map((size) => {
+                const isActive = size === selectedSize;
+                return (
+                  <TouchableOpacity
+                    key={size}
+                    style={[styles.sizeItem, isActive && styles.sizeItemActive]}
+                    onPress={() => setSelectedSize(size)}
+                  >
+                    <Text
+                      style={[styles.sizeText, isActive && styles.sizeTextActive]}
+                    >
+                      {size}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Divider */}
+            <View style={styles.divider} />
+
+            {/* Bottom: Price & Add to Cart */}
+            <View style={styles.bottomRow}>
+              <View>
+                <Text style={styles.totalLabel}>Total Price</Text>
+                <Text style={styles.totalPrice}>{product.priceBottom}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.addToCartButton}
+                onPress={() => {
+                  addToCart({
+                    id: productId,
+                    name: product.name,
+                    price: parsePrice(product.priceBottom),
+                    image: product.mainImage,
+                    size: selectedSize.toString(),
+                  });
+                  router.push("/cart");
+                }}
+              >
+                <Ionicons
+                  name="bag-add-outline"
+                  size={18}
+                  color="#FFFFFF"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.addToCartText}>Add To Cart</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+
+      {/* Drawer Menu */}
+      <DrawerMenu
+        visible={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+      />
+    </View>
   );
 }
 

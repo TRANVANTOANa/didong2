@@ -1,7 +1,8 @@
 // components/ui/DrawerMenu.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     Animated,
     Dimensions,
@@ -14,6 +15,7 @@ import {
     View,
 } from "react-native";
 import { useCart } from "../../context/CartContext";
+import { auth, db } from "../../firebase/firebaseConfig";
 
 const { width, height } = Dimensions.get("window");
 const DRAWER_WIDTH = width * 0.78;
@@ -31,16 +33,55 @@ type MenuItem = {
     onPress?: () => void;
 };
 
+interface UserProfile {
+    name: string;
+    email: string;
+    avatarUrl: string;
+}
+
 export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
     const router = useRouter();
     const { items } = useCart();
     const cartItemCount = items.reduce((sum, item) => sum + item.qty, 0);
 
+    // User profile state
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
     const slideX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
     const backdropOpacity = useRef(new Animated.Value(0)).current;
 
+    // Load user profile from Firebase
+    const loadUserProfile = useCallback(async () => {
+        try {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                setUserProfile({
+                    name: data.name || user.displayName || "Chưa cập nhật",
+                    email: data.email || user.email || "",
+                    avatarUrl: data.avatarUrl || "",
+                });
+            } else {
+                setUserProfile({
+                    name: user.displayName || "Chưa cập nhật",
+                    email: user.email || "",
+                    avatarUrl: "",
+                });
+            }
+        } catch (error) {
+            console.error("Error loading user profile:", error);
+        }
+    }, []);
+
+    // Load profile when drawer opens
     useEffect(() => {
         if (visible) {
+            loadUserProfile();
             Animated.parallel([
                 Animated.spring(slideX, {
                     toValue: 0,
@@ -68,7 +109,7 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
                 }),
             ]).start();
         }
-    }, [visible, slideX, backdropOpacity]);
+    }, [visible, slideX, backdropOpacity, loadUserProfile]);
 
     const handleNavigate = (path: string, replace = false) => {
         onClose();
@@ -90,7 +131,7 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
         {
             icon: "grid-outline",
             label: "All Products",
-            route: "/(main)",
+            route: "/(main)/products",
         },
         {
             icon: "bag-handle-outline",
@@ -212,13 +253,23 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
                 {/* Header with User Info */}
                 <View style={styles.drawerHeader}>
                     <View style={styles.userSection}>
-                        <Image
-                            source={require("../../assets/images/home/user.png")}
-                            style={styles.avatar}
-                        />
+                        {userProfile?.avatarUrl ? (
+                            <Image
+                                source={{ uri: userProfile.avatarUrl }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Ionicons name="person" size={28} color="#94A3B8" />
+                            </View>
+                        )}
                         <View style={styles.userInfo}>
-                            <Text style={styles.userName}>Alison Becker</Text>
-                            <Text style={styles.userEmail}>alisonbecker@gmail.com</Text>
+                            <Text style={styles.userName} numberOfLines={1}>
+                                {userProfile?.name || "Chưa cập nhật"}
+                            </Text>
+                            <Text style={styles.userEmail} numberOfLines={1}>
+                                {userProfile?.email || ""}
+                            </Text>
                         </View>
                     </View>
                     <TouchableOpacity
@@ -304,6 +355,13 @@ const styles = StyleSheet.create({
         height: 56,
         borderRadius: 28,
         backgroundColor: "#E8ECEF",
+    },
+    avatarPlaceholder: {
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderStyle: "dashed",
     },
     userInfo: {
         marginLeft: 12,

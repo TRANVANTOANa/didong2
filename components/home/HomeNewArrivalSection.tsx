@@ -32,7 +32,7 @@ export default function HomeNewArrivalSection() {
                     style={styles.card}
                     onPress={() =>
                         router.push({
-                            pathname: "/product/productDetail",
+                            pathname: "/product/[id]",
                             params: { id: "1" },
                         })
                     }
@@ -51,7 +51,7 @@ export default function HomeNewArrivalSection() {
                     style={styles.card}
                     onPress={() =>
                         router.push({
-                            pathname: "/product/productDetail",
+                            pathname: "/product/[id]",
                             params: { id: "2" },
                         })
                     }
@@ -70,7 +70,7 @@ export default function HomeNewArrivalSection() {
                     style={styles.card}
                     onPress={() =>
                         router.push({
-                            pathname: "/product/productDetail",
+                            pathname: "/product/[id]",
                             params: { id: "3" },
                         })
                     }
@@ -88,7 +88,7 @@ export default function HomeNewArrivalSection() {
                     image={require("../../assets/images/home/spnike3.jpg")}
                     onPress={() =>
                         router.push({
-                            pathname: "/product/productDetail",
+                            pathname: "/product/[id]",
                             params: { id: "4" },
                         })
                     }

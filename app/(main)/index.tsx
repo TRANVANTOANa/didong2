@@ -1,5 +1,6 @@
 // app/(main)/index.tsx
-import React, { useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 
 import CategoryTabs from "../../components/home/CategoryTabs";
@@ -13,6 +14,15 @@ import SearchBar from "../../components/ui/SearchBar";
 export default function HomeScreen() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Tự động đóng drawer khi màn hình mất focus (chuyển trang)
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setDrawerVisible(false);
+      };
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
