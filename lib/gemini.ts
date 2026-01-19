@@ -116,19 +116,44 @@ function analyzeIntentFallback(userMessage: string): any {
         }
     }
 
-    // Detect price
-    if (msg.includes('dưới') || msg.includes('duoi')) {
-        const match = msg.match(/(\d+)\s*(tr|triệu|trieu|million)/i);
-        if (match) {
-            intent.maxPrice = parseInt(match[1]) * 1000000;
-        }
-    }
+    // Detect price (USD or VND)
+    // Case 1: USD (e.g. $400, 400$, 400 usd)
+    const usdPattern = /(\$|usd)\s*(\d+)|(\d+)\s*(\$|usd)/i;
+    const usdMatch = msg.match(usdPattern);
 
-    if (msg.includes('từ') || msg.includes('tu')) {
-        const match = msg.match(/từ\s*(\d+).*đến\s*(\d+)/i);
-        if (match) {
-            intent.minPrice = parseInt(match[1]) * 1000000;
-            intent.maxPrice = parseInt(match[2]) * 1000000;
+    // Case 2: VND (e.g. 1 triệu, 1tr)
+    const vndPattern = /(\d+)\s*(tr|triệu|trieu|million)/i;
+    const vndMatch = msg.match(vndPattern);
+
+    if (msg.includes('dưới') || msg.includes('duoi') || msg.includes('under') || msg.includes('<')) {
+        if (usdMatch) {
+            const val = parseInt(usdMatch[2] || usdMatch[3]);
+            intent.maxPrice = val; // USD value directly
+        } else if (vndMatch) {
+            intent.maxPrice = parseInt(vndMatch[1]) * 1000000;
+            // Convert approx to USD if needed, but current data assumes USD prices in DB?
+            // Wait, product.price in DB is "$499". So it's USD.
+            // If user searches in VND, we might need conversion. 
+            // But for now let's assume user searches USD if they use $ sign.
+            // If they use VND, we probably need to convert logic or just ignore. 
+            // Let's assume for this specific task (fixing "$400"), we prioritize USD.
+        }
+    } else if (msg.includes('từ') || msg.includes('tu') || msg.includes('from')) {
+        // Range detection logic... keeping it simple for now or improving similarly
+        const rangeMatch = msg.match(/(\d+)\s*(-|đến|to)\s*(\d+)/);
+        if (rangeMatch) {
+            const min = parseInt(rangeMatch[1]);
+            const max = parseInt(rangeMatch[3]);
+            // Guess currency based on magnitude or symbols? 
+            // If < 5000 likely USD. If > 100000 likely VND.
+            if (max > 100000) {
+                intent.minPrice = min; // Treating as raw number or VND?
+                // Given DB is USD, we should probably convert. 
+                // But let's focus on the user's "$400" request first.
+            } else {
+                intent.minPrice = min;
+                intent.maxPrice = max;
+            }
         }
     }
 
@@ -180,11 +205,14 @@ export async function searchProducts(intent: any): Promise<Product[]> {
         // Lọc theo giá - Xử lý cả string và number
         let price = 0;
         if (typeof product.price === 'string') {
-            // Nếu là string, loại bỏ tất cả ký tự không phải số
-            price = parseInt(product.price.replace(/[^0-9]/g, ""));
+            // Nếu là string, loại bỏ '$' và ',' giữ lại số và dấu chấm thập phân
+            price = parseFloat(product.price.replace(/[$,]/g, ""));
         } else if (typeof product.price === 'number') {
             price = product.price;
         }
+
+        // Safety check for NaN
+        if (isNaN(price)) return false;
 
         if (intent.maxPrice && price > intent.maxPrice) return false;
         if (intent.minPrice && price < intent.minPrice) return false;

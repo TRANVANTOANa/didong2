@@ -1,18 +1,35 @@
 // app/checkout.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, query, updateDoc, where } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import {
     Alert,
+    Dimensions,
     Image,
+    Linking,
+    Modal,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from "react-native";
 import { useCart } from "../../context/CartContext";
+import { auth, db } from "../../firebase/firebaseConfig";
+import { checkMomoTransactionStatus, createMomoPayment } from "../../utils/momo";
+import storage from "../../utils/storage";
+
+interface AppliedVoucher {
+    id?: string;
+    code: string;
+    discount: number;
+    discountType: "PERCENTAGE" | "FIXED";
+    maxDiscountAmount?: string;
+}
+
+const { width } = Dimensions.get("window");
 
 export default function CheckoutScreen() {
     const router = useRouter();
@@ -23,14 +40,80 @@ export default function CheckoutScreen() {
         0
     );
     const shipping = items.length > 0 ? 40.99 : 0;
-    const total = subtotal + shipping;
+
 
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
     const [address, setAddress] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState<"cod" | "card">("cod");
+    const [paymentMethod, setPaymentMethod] = useState<"cod" | "card" | "momo">("cod");
+    const [selectedVoucher, setSelectedVoucher] = useState<AppliedVoucher | null>(null);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            loadSavedVoucher();
+        }, [])
+    );
+
+    const loadSavedVoucher = async () => {
+        try {
+            const savedVoucher = await storage.getItem("selectedVoucher");
+            if (savedVoucher) {
+                setSelectedVoucher(JSON.parse(savedVoucher));
+            }
+        } catch (error) {
+            console.error("Error loading voucher:", error);
+        }
+    };
+
+    // Calculate discount
+    let discount = 0;
+    if (selectedVoucher) {
+        if (selectedVoucher.discountType === "PERCENTAGE") {
+            discount = (subtotal * selectedVoucher.discount) / 100;
+            if (selectedVoucher.maxDiscountAmount) {
+                const maxDiscount = parseFloat(selectedVoucher.maxDiscountAmount);
+                discount = Math.min(discount, maxDiscount);
+            }
+        } else {
+            discount = selectedVoucher.discount;
+        }
+    }
+
+    const total = Math.max(0, subtotal + shipping - discount);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // MoMo QR Dialog State
+    // MoMo QR Dialog State
+    const [showMomoQR, setShowMomoQR] = useState(false);
+    const [momoPayUrl, setMomoPayUrl] = useState("");
+    const [currentOrderId, setCurrentOrderId] = useState("");
+    const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+
+    // Auto-poll payment status
+    useEffect(() => {
+        let intervalId: any;
+
+        if (showMomoQR && currentOrderId) {
+            setIsCheckingStatus(true);
+            intervalId = setInterval(async () => {
+                console.log("Polling MoMo status for:", currentOrderId);
+                const statusData = await checkMomoTransactionStatus(currentOrderId);
+
+                if (statusData && statusData.resultCode === 0) {
+                    console.log("Payment Successful!");
+                    clearInterval(intervalId);
+                    setShowMomoQR(false);
+                    setIsCheckingStatus(false);
+                    await finalizeOrder(fullName, phone, address, "momo", currentOrderId);
+                }
+            }, 5000); // Check every 5 seconds
+        }
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [showMomoQR, currentOrderId]);
 
     const handlePay = async () => {
         if (!fullName.trim()) {
@@ -49,6 +132,52 @@ export default function CheckoutScreen() {
         setIsSubmitting(true);
 
         try {
+            if (paymentMethod === "momo") {
+                const orderId = "MOMO" + new Date().getTime();
+                // Convert to VND roughly for testing
+                const amountVND = (Math.round(total * 25000)).toString();
+
+                const momoResponse = await createMomoPayment(
+                    orderId,
+                    amountVND,
+                    "Payment for order " + orderId
+                );
+
+                if (momoResponse && momoResponse.payUrl) {
+                    // Set QR Data and Show Modal
+                    console.log("Opening QR Modal with URL:", momoResponse.payUrl);
+
+                    setMomoPayUrl(momoResponse.payUrl);
+                    setCurrentOrderId(orderId);
+                    setShowMomoQR(true);
+                    setIsSubmitting(false); // Stop loading to show modal
+                    return; // Wait for user interaction in Modal
+                } else {
+                    throw new Error(momoResponse.message || "MoMo payment creation failed");
+                }
+            }
+
+            // Normal flow for COD and CARD (or after MoMo success if we handled it differently, but here we stop for QR)
+            await finalizeOrder(fullName, phone, address, paymentMethod);
+
+        } catch (error) {
+            console.error("Error saving order:", error);
+            Alert.alert(
+                "Order Failed",
+                "Could not save your order. Please try again."
+            );
+            setIsSubmitting(false);
+        }
+    };
+
+    const finalizeOrder = async (
+        pName: string,
+        pPhone: string,
+        pAddress: string,
+        pMethod: "cod" | "card" | "momo",
+        pOrderId?: string
+    ) => {
+        try {
             // Import and save order to Firebase
             const { saveOrder } = await import("../../firebase/orders");
 
@@ -62,38 +191,97 @@ export default function CheckoutScreen() {
                 qty: item.qty,
             }));
 
+            // If we have a pOrderId (from MoMo), we use it? 
+            // The saveOrder function generates its own ID currently. 
+            // We might want to pass the MoMo Order ID.
+            // For now, let's keep the logic simple and just save.
+
             const order = await saveOrder({
                 items: orderItems,
                 subtotal,
                 shipping,
                 total,
-                customerName: fullName,
-                phone,
-                address,
-                paymentMethod,
+                customerName: pName,
+                phone: pPhone,
+                address: pAddress,
+                paymentMethod: pMethod,
             });
 
             console.log("Order saved successfully:", order.orderId);
 
+            // Handle Voucher Usage
+            if (selectedVoucher && auth.currentUser) {
+                try {
+                    // 1. Update User's Saved Voucher (Decrement or Delete)
+                    const userVouchersRef = collection(db, "users", auth.currentUser.uid, "savedVouchers");
+
+                    // Priority: Find by ID, then fallback to Code
+                    let voucherDocSnapshot;
+
+                    if (selectedVoucher.id) {
+                        const docRef = doc(userVouchersRef, selectedVoucher.id);
+                        voucherDocSnapshot = await getDoc(docRef);
+                    }
+
+                    // If not found by ID (e.g. old data), try finding by Code
+                    if (!voucherDocSnapshot?.exists()) {
+                        const q = query(userVouchersRef, where("code", "==", selectedVoucher.code));
+                        const snapshot = await getDocs(q);
+                        if (!snapshot.empty) voucherDocSnapshot = snapshot.docs[0];
+                    }
+
+                    if (voucherDocSnapshot && voucherDocSnapshot.exists()) {
+                        const currentQty = voucherDocSnapshot.data().quantity || 1;
+
+                        if (currentQty > 1) {
+                            await updateDoc(voucherDocSnapshot.ref, {
+                                quantity: increment(-1)
+                            });
+                            console.log(`Decremented voucher ${selectedVoucher.code} qty to ${currentQty - 1}`);
+                        } else {
+                            await deleteDoc(voucherDocSnapshot.ref);
+                            console.log(`Removed voucher ${selectedVoucher.code} from user wallet`);
+                        }
+                    } else {
+                        console.warn("Could not find voucher to delete:", selectedVoucher.code);
+                    }
+
+                    // 2. Increment Global Usage Count (Optional but recommended)
+                    const globalVouchersRef = collection(db, "vouchers");
+                    const globalQ = query(globalVouchersRef, where("code", "==", selectedVoucher.code));
+                    const globalSnapshot = await getDocs(globalQ);
+
+                    if (!globalSnapshot.empty) {
+                        await updateDoc(globalSnapshot.docs[0].ref, {
+                            usedCount: increment(1)
+                        });
+                    }
+
+                } catch (voucherError) {
+                    console.error("Error processing voucher usage:", voucherError);
+                    // Don't block the order success flow for this
+                }
+            }
+
             // Clear cart and navigate to success page
+            // Clear cart, voucher and navigate to success page
             clearCart();
+            await storage.removeItem("selectedVoucher");
             router.replace({
                 pathname: "/product/order-success",
                 params: {
                     total: total.toFixed(2),
-                    name: fullName,
+                    name: pName,
                     itemCount: items.length.toString(),
                     orderId: order.orderId,
                 },
             });
-        } catch (error) {
-            console.error("Error saving order:", error);
-            Alert.alert(
-                "Order Failed",
-                "Could not save your order. Please try again."
-            );
+        } catch (err) {
+            console.error(err);
+            Alert.alert("Error", "Failed to finalize order.");
         } finally {
             setIsSubmitting(false);
+            setShowMomoQR(false);
         }
     };
 
@@ -150,6 +338,16 @@ export default function CheckoutScreen() {
                             <Text style={styles.priceLabel}>Shipping</Text>
                             <Text style={styles.priceValue}>${shipping.toFixed(2)}</Text>
                         </View>
+                        {selectedVoucher && discount > 0 && (
+                            <View style={styles.priceRow}>
+                                <Text style={[styles.priceLabel, { color: "#10B981" }]}>
+                                    Discount ({selectedVoucher.code})
+                                </Text>
+                                <Text style={[styles.priceValue, { color: "#10B981" }]}>
+                                    -${discount.toFixed(2)}
+                                </Text>
+                            </View>
+                        )}
                         <View style={styles.divider} />
                         <View style={styles.priceRow}>
                             <Text style={styles.totalLabel}>Total</Text>
@@ -258,6 +456,31 @@ export default function CheckoutScreen() {
                             {paymentMethod === "card" && <View style={styles.radioInner} />}
                         </View>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.paymentOption,
+                            paymentMethod === "momo" && styles.paymentOptionActive,
+                        ]}
+                        onPress={() => setPaymentMethod("momo")}
+                    >
+                        <View style={styles.paymentIconWrapper}>
+                            <Image
+                                source={{ uri: "https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png" }}
+                                style={{ width: 32, height: 32 }}
+                                resizeMode="contain"
+                            />
+                        </View>
+                        <View style={styles.paymentInfo}>
+                            <Text style={[styles.paymentTitle, paymentMethod === "momo" && styles.paymentTitleActive]}>
+                                MoMo E-Wallet
+                            </Text>
+                            <Text style={styles.paymentDesc}>Fast & Secure Payment</Text>
+                        </View>
+                        <View style={[styles.radioOuter, paymentMethod === "momo" && styles.radioOuterActive]}>
+                            {paymentMethod === "momo" && <View style={styles.radioInner} />}
+                        </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Pay Now Button */}
@@ -280,6 +503,65 @@ export default function CheckoutScreen() {
                     </Text>
                 </TouchableOpacity>
             </ScrollView>
+
+            {/* MoMo QR Modal */}
+            <Modal
+                visible={showMomoQR}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowMomoQR(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Thanh toán MoMo</Text>
+                            <TouchableOpacity onPress={() => setShowMomoQR(false)}>
+                                <Ionicons name="close" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.qrContainer}>
+                            <Text style={styles.qrLabel}>Quét mã để thanh toán</Text>
+                            <View style={styles.qrWrapper}>
+                                {momoPayUrl ? (
+                                    <Image
+                                        source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(momoPayUrl)}` }}
+                                        style={{ width: 200, height: 200 }}
+                                        resizeMode="contain"
+                                    />
+                                ) : (
+                                    <View style={{ width: 200, height: 200, backgroundColor: '#f0f0f0' }} />
+                                )}
+                            </View>
+                            <Text style={styles.priceValueLarge}>₫{(Math.round(total * 25000)).toLocaleString()}</Text>
+                        </View>
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={styles.openAppButton}
+                                onPress={() => {
+                                    if (momoPayUrl) Linking.openURL(momoPayUrl);
+                                }}
+                            >
+                                <Text style={styles.openAppButtonText}>Mở App MoMo</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.statusContainer}>
+                                <Ionicons name="sync" size={20} color="#64748B" style={styles.spinningIcon} />
+                                <Text style={styles.statusText}>Đang chờ thanh toán...</Text>
+                            </View>
+
+                            {/* Hidden manual button for backup if needed, or remove completely */}
+                            {/* <TouchableOpacity
+                                style={styles.confirmButton}
+                                onPress={() => finalizeOrder(fullName, phone, address, "momo", currentOrderId)}
+                            >
+                                <Text style={styles.confirmButtonText}>Tôi đã thanh toán xong (Thủ công)</Text>
+                            </TouchableOpacity> */}
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -524,4 +806,102 @@ const styles = StyleSheet.create({
         fontWeight: "700",
         color: "#FFFFFF",
     },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 20,
+        zIndex: 1000,
+    },
+    modalContent: {
+        width: "100%",
+        maxWidth: 340,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 24,
+        padding: 24,
+        alignItems: "center",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    modalHeader: {
+        flexDirection: "row",
+        width: "100%",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: "700",
+        color: "#0F172A",
+    },
+    qrContainer: {
+        alignItems: "center",
+        marginBottom: 24,
+    },
+    qrLabel: {
+        fontSize: 14,
+        color: "#64748B",
+        marginBottom: 16,
+    },
+    qrWrapper: {
+        padding: 16,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        marginBottom: 16,
+    },
+    priceValueLarge: {
+        fontSize: 24,
+        fontWeight: "700",
+        color: "#d82d8b", // MoMo pink color
+    },
+    modalActions: {
+        width: "100%",
+        gap: 12,
+    },
+    openAppButton: {
+        width: "100%",
+        paddingVertical: 14,
+        borderRadius: 14,
+        backgroundColor: "#EBF4FF",
+        alignItems: "center",
+    },
+    openAppButtonText: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#5B9EE1",
+    },
+    confirmButton: {
+        width: "100%",
+        paddingVertical: 14,
+        borderRadius: 14,
+        backgroundColor: "#d82d8b", // MoMo pink
+        alignItems: "center",
+    },
+    confirmButtonText: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#FFFFFF",
+    },
+    statusContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        marginTop: 10,
+        gap: 8,
+    },
+    statusText: {
+        fontSize: 14,
+        color: "#64748B",
+    },
+    spinningIcon: {
+        // Simple rotation handle via Reanimated if needed, but static for now is okay or use ActivityIndicator
+    }
 });

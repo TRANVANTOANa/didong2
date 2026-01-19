@@ -13,6 +13,9 @@ export default function AccountLayout() {
             <Stack.Screen name="my-orders" />
             <Stack.Screen name="address" />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="lucky-spin" />
+            <Stack.Screen name="vouchers" />
+            <Stack.Screen name="seed-vouchers" />
         </Stack>
     );
 }

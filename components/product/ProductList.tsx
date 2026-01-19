@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     Dimensions,
     FlatList,
     ListRenderItem,
@@ -13,6 +14,7 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
+import { useCart } from "../../context/CartContext";
 import ProductCard from "./ProductCard";
 
 // Tính toán khoảng cách
@@ -36,14 +38,26 @@ export type Product = {
 // Danh sách category
 const CATEGORIES = ["All", "Nike", "Puma", "Adidas"];
 
-export default function ProductList() {
+interface ProductListProps {
+    initialSearch?: string;
+    showHeader?: boolean;
+}
+
+export default function ProductList({ initialSearch, showHeader = true }: ProductListProps) {
     const router = useRouter();
+    const { addToCart } = useCart();
     const params = useLocalSearchParams<{ search?: string }>();
 
     // State quản lý
     const [activeCategory, setActiveCategory] = useState("All");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc" | null>(null);
-    const [searchKeyword, setSearchKeyword] = useState(params.search || "");
+    const [searchKeyword, setSearchKeyword] = useState(initialSearch || params.search || "");
+
+    useEffect(() => {
+        if (initialSearch !== undefined) {
+            setSearchKeyword(initialSearch);
+        }
+    }, [initialSearch]);
 
     // Dữ liệu sản phẩm sẽ được lấy từ Firestore
     const [products, setProducts] = useState<Product[]>([]);
@@ -91,8 +105,9 @@ export default function ProductList() {
         // Sắp xếp theo Giá
         if (sortOrder) {
             result.sort((a, b) => {
-                const priceA = parseFloat(String(a.price).replace("$", ""));
-                const priceB = parseFloat(String(b.price).replace("$", ""));
+                const parsePrice = (p: string) => parseFloat(String(p).replace("$", "").replace(/,/g, ""));
+                const priceA = parsePrice(a.price);
+                const priceB = parsePrice(b.price);
                 return sortOrder === "asc" ? priceA - priceB : priceB - priceA;
             });
         }
@@ -130,7 +145,16 @@ export default function ProductList() {
                         })
                     }
                     onAddPress={() => {
-                        console.log(`Add ${item.name}`);
+                        const priceVal = parseFloat(String(item.price).replace("$", "").replace(/,/g, ""));
+                        addToCart({
+                            id: item.id,
+                            name: item.name,
+                            price: isNaN(priceVal) ? 0 : priceVal,
+                            image: { uri: item.imageUrl },
+                            imageUrl: item.imageUrl,
+                            size: "41", // Default size
+                        });
+                        Alert.alert("Success", "Added to cart!");
                     }}
                 />
             </View>
@@ -145,31 +169,35 @@ export default function ProductList() {
         ) : (
             <View style={styles.container}>
                 {/* Header Title */}
-                <View style={styles.headerSection}>
-                    <Text style={styles.title}>
-                        {searchKeyword ? `Search: "${searchKeyword}"` : "All Products"}
-                    </Text>
-                </View>
+                {showHeader && (
+                    <View style={styles.headerSection}>
+                        <Text style={styles.title}>
+                            {searchKeyword ? `Search: "${searchKeyword}"` : "All Products"}
+                        </Text>
+                    </View>
+                )}
 
                 {/* Search Bar */}
-                <View style={styles.searchContainer}>
-                    <View style={styles.searchInputWrapper}>
-                        <Ionicons name="search" size={18} color="#5B9EE1" />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="Search by name, category..."
-                            placeholderTextColor="#9CA3AF"
-                            value={searchKeyword}
-                            onChangeText={setSearchKeyword}
-                            returnKeyType="search"
-                        />
-                        {searchKeyword.length > 0 && (
-                            <TouchableOpacity onPress={handleClearSearch}>
-                                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View >
+                {showHeader && (
+                    <View style={styles.searchContainer}>
+                        <View style={styles.searchInputWrapper}>
+                            <Ionicons name="search" size={18} color="#5B9EE1" />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder="Search by name, category..."
+                                placeholderTextColor="#9CA3AF"
+                                value={searchKeyword}
+                                onChangeText={setSearchKeyword}
+                                returnKeyType="search"
+                            />
+                            {searchKeyword.length > 0 && (
+                                <TouchableOpacity onPress={handleClearSearch}>
+                                    <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View >
+                )}
 
                 {/* Filter Section */}
                 < View style={styles.filterWrapper} >

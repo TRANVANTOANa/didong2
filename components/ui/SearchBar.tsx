@@ -32,7 +32,7 @@ export default function SearchBar({
     } else if (trimmedKeyword) {
       // Mặc định điều hướng đến trang products với keyword search
       router.push({
-        pathname: "/(main)/products",
+        pathname: "/products",
         params: { search: trimmedKeyword },
       });
     }

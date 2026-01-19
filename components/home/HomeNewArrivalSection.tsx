@@ -1,11 +1,71 @@
 // components/home/HomeNewArrivalSection.tsx
 import { useRouter } from "expo-router";
-import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCart } from "../../context/CartContext";
+import { db } from "../../firebase/firebaseConfig";
 import NewArrivalCard from "./NewArrivalCard";
 
-export default function HomeNewArrivalSection() {
+interface HomeNewArrivalSectionProps {
+    selectedCategory?: string;
+}
+
+export default function HomeNewArrivalSection({ selectedCategory }: HomeNewArrivalSectionProps) {
     const router = useRouter();
+    const { addToCart } = useCart();
+    const [products, setProducts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchProducts();
+    }, [selectedCategory]);
+
+    const fetchProducts = async () => {
+        try {
+            setLoading(true);
+            let productsQuery;
+
+            if (selectedCategory) {
+                productsQuery = query(
+                    collection(db, "products"),
+                    where("category", "==", selectedCategory)
+                );
+            } else {
+                productsQuery = query(collection(db, "products"));
+            }
+
+            const snapshot = await getDocs(productsQuery);
+            const productList: any[] = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                // Filter for NEW items or just show them if they match criteria
+                // For demonstration, let's include items that have "NEW" or show all if few.
+                // Or just show different subset.
+                productList.push({ id: doc.id, ...data });
+            });
+
+            // For New Arrival, maybe we reverse to show latest added (if we assume added sequentially)
+            // or filter by tag "NEW"
+            const newArrivals = productList.filter(p => p.tag === "NEW" || p.tag === "BEST CHOICE");
+
+            // If no specific NEW items, just show the list
+            setProducts(newArrivals.length > 0 ? newArrivals : productList);
+
+        } catch (error) {
+            console.error("Error fetching new arrivals:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) {
+        return <ActivityIndicator size="small" color="#5B9EE1" style={{ marginTop: 20 }} />;
+    }
+
+    if (products.length === 0) {
+        return null; // Hide section if no new arrivals
+    }
 
     return (
         <View>
@@ -22,80 +82,38 @@ export default function HomeNewArrivalSection() {
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* Product 1 */}
-                <NewArrivalCard
-                    id="4"
-                    tag="BEST CHOICE"
-                    name="Nike Air Jordan"
-                    price="$849.69"
-                    image={require("../../assets/images/home/sp3_bestchoi.png")}
-                    style={styles.card}
-                    onPress={() =>
-                        router.push({
-                            pathname: "/product/[id]",
-                            params: { id: "1" },
-                        })
-                    }
-                    onAddPress={() => {
-                        console.log("Add Nike Air Jordan");
-                    }}
-                />
+                {products.map((item) => (
+                    <NewArrivalCard
+                        key={item.id}
+                        id={item.id}
+                        tag={item.tag || "NEW"}
+                        name={item.name}
+                        price={item.price.toString().startsWith("$") ? item.price : `$${item.price}`}
+                        image={typeof item.image === "string" ? { uri: item.image } : item.image}
+                        style={styles.card}
+                        onPress={() =>
+                            router.push({
+                                pathname: "/product/[id]",
+                                params: { id: item.id },
+                            })
+                        }
+                        onAddPress={() => {
+                            const priceVal = typeof item.price === "string"
+                                ? parseFloat(item.price.replace('$', '').replace(/,/g, ''))
+                                : item.price;
 
-                {/* Product 2 */}
-                <NewArrivalCard
-                    id="5"
-                    tag="NEW"
-                    name="Nike Spike 1"
-                    price="$759.00"
-                    image={require("../../assets/images/home/spnike1.jpg")}
-                    style={styles.card}
-                    onPress={() =>
-                        router.push({
-                            pathname: "/product/[id]",
-                            params: { id: "2" },
-                        })
-                    }
-                    onAddPress={() => {
-                        console.log("Add Nike Spike 1");
-                    }}
-                />
-
-                {/* Product 3 */}
-                <NewArrivalCard
-                    id="6"
-                    tag="NEW"
-                    name="Nike Spike 2"
-                    price="$799.00"
-                    image={require("../../assets/images/home/spnike2.jpg")}
-                    style={styles.card}
-                    onPress={() =>
-                        router.push({
-                            pathname: "/product/[id]",
-                            params: { id: "3" },
-                        })
-                    }
-                    onAddPress={() => {
-                        console.log("Add Nike Spike 2");
-                    }}
-                />
-
-                {/* Product 4 */}
-                <NewArrivalCard
-                    id="7"
-                    tag="HOT"
-                    name="Nike Spike 3"
-                    price="$829.00"
-                    image={require("../../assets/images/home/spnike3.jpg")}
-                    onPress={() =>
-                        router.push({
-                            pathname: "/product/[id]",
-                            params: { id: "4" },
-                        })
-                    }
-                    onAddPress={() => {
-                        console.log("Add Nike Spike 3");
-                    }}
-                />
+                            addToCart({
+                                id: item.id,
+                                name: item.name,
+                                price: isNaN(priceVal) ? 0 : priceVal,
+                                image: typeof item.image === "string" ? { uri: item.image } : item.image,
+                                imageUrl: typeof item.image === "string" ? item.image : undefined,
+                                size: "41", // Default size for quick add
+                            });
+                            Alert.alert("Success", "Added to cart!");
+                        }}
+                    />
+                ))}
             </ScrollView>
         </View>
     );

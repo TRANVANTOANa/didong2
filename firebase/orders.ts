@@ -26,7 +26,7 @@ export type Order = {
     customerName: string;
     phone: string;
     address: string;
-    paymentMethod: "cod" | "card";
+    paymentMethod: "cod" | "card" | "momo";
     createdAt: Date;
 };
 

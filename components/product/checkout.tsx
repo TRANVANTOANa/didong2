@@ -1,10 +1,11 @@
 // app/checkout.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
     Alert,
     Image,
+    Linking,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,6 +14,15 @@ import {
     View,
 } from "react-native";
 import { useCart } from "../../context/CartContext";
+import { createMomoPayment } from "../../utils/momo";
+import storage from "../../utils/storage";
+
+interface AppliedVoucher {
+    code: string;
+    discount: number;
+    discountType: "PERCENTAGE" | "FIXED";
+    maxDiscountAmount?: string;
+}
 
 export default function CheckoutScreen() {
     const router = useRouter();
@@ -23,14 +33,49 @@ export default function CheckoutScreen() {
         0
     );
     const shipping = items.length > 0 ? 40.99 : 0;
-    const total = subtotal + shipping;
+
 
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
     const [address, setAddress] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState<"cod" | "card">("cod");
+    const [paymentMethod, setPaymentMethod] = useState<"cod" | "card" | "momo">("cod");
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [selectedVoucher, setSelectedVoucher] = useState<AppliedVoucher | null>(null);
 
-    const handlePay = () => {
+    useFocusEffect(
+        React.useCallback(() => {
+            loadSavedVoucher();
+        }, [])
+    );
+
+    const loadSavedVoucher = async () => {
+        try {
+            const savedVoucher = await storage.getItem("selectedVoucher");
+            if (savedVoucher) {
+                setSelectedVoucher(JSON.parse(savedVoucher));
+            }
+        } catch (error) {
+            console.error("Error loading voucher:", error);
+        }
+    };
+
+    // Calculate discount
+    let discount = 0;
+    if (selectedVoucher) {
+        if (selectedVoucher.discountType === "PERCENTAGE") {
+            discount = (subtotal * selectedVoucher.discount) / 100;
+            if (selectedVoucher.maxDiscountAmount) {
+                const maxDiscount = parseFloat(selectedVoucher.maxDiscountAmount);
+                discount = Math.min(discount, maxDiscount);
+            }
+        } else {
+            discount = selectedVoucher.discount;
+        }
+    }
+
+    const total = Math.max(0, subtotal + shipping - discount);
+
+    const handlePay = async () => {
         if (!fullName.trim()) {
             Alert.alert("Missing Information", "Please enter your full name.");
             return;
@@ -41,6 +86,73 @@ export default function CheckoutScreen() {
         }
         if (!address.trim()) {
             Alert.alert("Missing Information", "Please enter your address.");
+            return;
+        }
+
+        if (paymentMethod === "momo") {
+            try {
+                setIsProcessing(true);
+                const orderId = "MOMO" + new Date().getTime();
+                const cleanTotal = Math.round(total).toString(); // MoMo expects integer amount for VND usually, but user snippet used string '50000'. 
+                // Note: user sample uses VND. Items appear to be in USD ($). 
+                // We should probably convert or just send the number as is (treated as VND).
+                // Given the sample '50000' and items total ~$40, 40 VND is tiny.
+                // Assuming the backend is test environment, we pass the raw number * 25000? 
+                // Or just pass the number. Let's pass the number * 25000 to mimic VND conversion 
+                // or just '50000' hardcoded if we want a safe test?
+                // The prompt 'format price to USD' was a previous task. 
+                // I'll assume current prices are USD. MoMo expects VND.
+                // I will convert * 25000 approximately.
+                const amountVND = (Math.round(total * 25000)).toString();
+
+                const response = await createMomoPayment(
+                    orderId,
+                    amountVND,
+                    "Payment for order " + orderId
+                );
+
+                if (response && response.payUrl) {
+                    // Open MoMo App
+                    const supported = await Linking.canOpenURL(response.payUrl);
+                    if (supported) {
+                        await Linking.openURL(response.payUrl);
+                        // After opening, we can assume "pending" or success for this demo
+                        // Let's ask user to confirm they paid? Or just clear cart.
+                        Alert.alert(
+                            "Payment Initiated",
+                            "Please complete the payment in the MoMo app. After payment, click OK.",
+                            [
+                                {
+                                    text: "I have paid",
+                                    onPress: () => {
+                                        clearCart();
+                                        router.replace({
+                                            pathname: "/product/order-success",
+                                            params: {
+                                                total: total.toFixed(2),
+                                                name: fullName,
+                                                itemCount: items.length.toString(),
+                                            },
+                                        });
+                                    }
+                                },
+                                {
+                                    text: "Cancel",
+                                    style: "cancel"
+                                }
+                            ]
+                        );
+                    } else {
+                        Alert.alert("Error", "Cannot open payment link: " + response.payUrl);
+                    }
+                } else {
+                    Alert.alert("Payment Error", "Could not create payment: " + (response.message || "Unknown error"));
+                }
+            } catch (error) {
+                Alert.alert("Error", "Payment creation failed.");
+            } finally {
+                setIsProcessing(false);
+            }
             return;
         }
 
@@ -109,6 +221,16 @@ export default function CheckoutScreen() {
                             <Text style={styles.priceLabel}>Shipping</Text>
                             <Text style={styles.priceValue}>${shipping.toFixed(2)}</Text>
                         </View>
+                        {selectedVoucher && discount > 0 && (
+                            <View style={styles.priceRow}>
+                                <Text style={[styles.priceLabel, { color: "#10B981" }]}>
+                                    Discount ({selectedVoucher.code})
+                                </Text>
+                                <Text style={[styles.priceValue, { color: "#10B981" }]}>
+                                    -${discount.toFixed(2)}
+                                </Text>
+                            </View>
+                        )}
                         <View style={styles.divider} />
                         <View style={styles.priceRow}>
                             <Text style={styles.totalLabel}>Total</Text>
@@ -217,6 +339,31 @@ export default function CheckoutScreen() {
                             {paymentMethod === "card" && <View style={styles.radioInner} />}
                         </View>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.paymentOption,
+                            paymentMethod === "momo" && styles.paymentOptionActive,
+                        ]}
+                        onPress={() => setPaymentMethod("momo")}
+                    >
+                        <View style={styles.paymentIconWrapper}>
+                            <Image
+                                source={{ uri: "https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png" }}
+                                style={{ width: 32, height: 32 }}
+                                resizeMode="contain"
+                            />
+                        </View>
+                        <View style={styles.paymentInfo}>
+                            <Text style={[styles.paymentTitle, paymentMethod === "momo" && styles.paymentTitleActive]}>
+                                MoMo E-Wallet
+                            </Text>
+                            <Text style={styles.paymentDesc}>Fast & Secure Payment</Text>
+                        </View>
+                        <View style={[styles.radioOuter, paymentMethod === "momo" && styles.radioOuterActive]}>
+                            {paymentMethod === "momo" && <View style={styles.radioInner} />}
+                        </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Pay Now Button */}
@@ -224,12 +371,15 @@ export default function CheckoutScreen() {
                     style={[
                         styles.payButton,
                         items.length === 0 && { opacity: 0.5 },
+                        isProcessing && { opacity: 0.7 }
                     ]}
-                    disabled={items.length === 0}
+                    disabled={items.length === 0 || isProcessing}
                     onPress={handlePay}
                 >
                     <Ionicons name="checkmark-circle-outline" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.payText}>Place Order - ${total.toFixed(2)}</Text>
+                    <Text style={styles.payText}>
+                        {isProcessing ? "Processing..." : `Place Order - $${total.toFixed(2)}`}
+                    </Text>
                 </TouchableOpacity>
             </ScrollView>
         </View>

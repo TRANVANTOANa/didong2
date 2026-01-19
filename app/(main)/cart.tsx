@@ -1,7 +1,7 @@
 // app/(main)/cart.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
   Image,
   ScrollView,
@@ -11,14 +11,56 @@ import {
   View,
 } from "react-native";
 import { useCart } from "../../context/CartContext";
+import storage from "../../utils/storage";
+
+interface AppliedVoucher {
+  code: string;
+  discount: number;
+  discountType: "PERCENTAGE" | "FIXED";
+  maxDiscountAmount?: string;
+}
 
 export default function CartScreen() {
   const router = useRouter();
   const { items, changeQty, removeItem } = useCart();
+  const [selectedVoucher, setSelectedVoucher] = useState<AppliedVoucher | null>(null);
+
+  // Load voucher from AsyncStorage when screen loads
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSavedVoucher();
+    }, [])
+  );
+
+  const loadSavedVoucher = async () => {
+    try {
+      const savedVoucher = await storage.getItem("selectedVoucher");
+      if (savedVoucher) {
+        setSelectedVoucher(JSON.parse(savedVoucher));
+      }
+    } catch (error) {
+      console.error("Error loading voucher:", error);
+    }
+  };
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
   const shipping = items.length > 0 ? 40.99 : 0;
-  const total = subtotal + shipping;
+
+  // Calculate discount
+  let discount = 0;
+  if (selectedVoucher) {
+    if (selectedVoucher.discountType === "PERCENTAGE") {
+      discount = (subtotal * selectedVoucher.discount) / 100;
+      if (selectedVoucher.maxDiscountAmount) {
+        const maxDiscount = parseFloat(selectedVoucher.maxDiscountAmount);
+        discount = Math.min(discount, maxDiscount);
+      }
+    } else {
+      discount = selectedVoucher.discount;
+    }
+  }
+
+  const total = subtotal + shipping - discount;
 
   const handleCheckout = () => {
     router.push("/product/checkout");
@@ -117,6 +159,49 @@ export default function CartScreen() {
             </View>
           )}
         </View>
+
+        {/* Voucher Card */}
+        {items.length > 0 && (
+          <View style={[styles.card, styles.voucherCard]}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="pricetag-outline" size={18} color="#10B981" />
+              <Text style={styles.cardHeaderText}>Apply Voucher</Text>
+            </View>
+
+            {selectedVoucher ? (
+              <View style={styles.appliedVoucherContainer}>
+                <View style={styles.appliedVoucherInfo}>
+                  <View style={styles.voucherCodeBadge}>
+                    <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                    <Text style={styles.voucherCodeText}>{selectedVoucher.code}</Text>
+                  </View>
+                  <Text style={styles.voucherDiscountText}>
+                    -{selectedVoucher.discountType === "PERCENTAGE"
+                      ? `${selectedVoucher.discount}%`
+                      : `$${selectedVoucher.discount.toFixed(2)}`} discount applied
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.removeVoucherBtn}
+                  onPress={() => setSelectedVoucher(null)}
+                >
+                  <Ionicons name="close-circle" size={20} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.selectVoucherBtn}
+                onPress={() => router.push("/account/vouchers")}
+              >
+                <View style={styles.selectVoucherContent}>
+                  <Ionicons name="ticket-outline" size={20} color="#5B9EE1" />
+                  <Text style={styles.selectVoucherText}>Select a voucher</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* Order Summary cố định dưới đáy màn hình */}
@@ -141,6 +226,16 @@ export default function CartScreen() {
                   ${shipping.toFixed(2)}
                 </Text>
               </View>
+              {selectedVoucher && discount > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, styles.discountLabel]}>
+                    Discount ({selectedVoucher.code})
+                  </Text>
+                  <Text style={[styles.summaryValue, styles.discountValue]}>
+                    -${discount.toFixed(2)}
+                  </Text>
+                </View>
+              )}
               <View style={styles.divider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.totalLabel}>Total</Text>
@@ -392,5 +487,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  // Voucher Styles
+  voucherCard: {
+    marginTop: 16,
+  },
+  selectVoucherBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "#F0F7FF",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#5B9EE1",
+    borderStyle: "dashed",
+  },
+  selectVoucherContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  selectVoucherText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#5B9EE1",
+  },
+  appliedVoucherContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#10B981",
+    padding: 14,
+  },
+  appliedVoucherInfo: {
+    flex: 1,
+  },
+  voucherCodeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  voucherCodeText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#10B981",
+    letterSpacing: 0.5,
+  },
+  voucherDiscountText: {
+    fontSize: 13,
+    color: "#059669",
+  },
+  removeVoucherBtn: {
+    padding: 4,
+  },
+  discountLabel: {
+    color: "#10B981",
+    fontWeight: "600",
+  },
+  discountValue: {
+    color: "#10B981",
+    fontWeight: "700",
   },
 });

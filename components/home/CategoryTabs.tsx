@@ -1,5 +1,5 @@
 // components/CategoryTabs.tsx
-import React, { useState } from "react";
+import React from "react";
 import {
   Image,
   ScrollView,
@@ -8,16 +8,19 @@ import {
 } from "react-native";
 
 const brands = [
-  { id: "nike", image: require("../../assets/images/home/nike.png") },
-  { id: "adidas", image: require("../../assets/images/home/adidas.png") },
-  { id: "puma", image: require("../../assets/images/home/puma.png") },
-  { id: "under_armour", image: require("../../assets/images/home/under_armour.png") },
-  { id: "converse", image: require("../../assets/images/home/converse.png") },
+  { id: "Nike", image: require("../../assets/images/home/nike.png") },
+  { id: "Adidas", image: require("../../assets/images/home/adidas.png") },
+  { id: "Puma", image: require("../../assets/images/home/puma.png") },
+  { id: "Under Armour", image: require("../../assets/images/home/under_armour.png") },
+  { id: "Converse", image: require("../../assets/images/home/converse.png") },
 ];
 
-const CategoryTabs = () => {
-  const [active, setActive] = useState("nike");
+interface CategoryTabsProps {
+  selectedCategory: string;
+  onSelectCategory: (category: string) => void;
+}
 
+const CategoryTabs = ({ selectedCategory, onSelectCategory }: CategoryTabsProps) => {
   return (
     <ScrollView
       horizontal
@@ -25,12 +28,12 @@ const CategoryTabs = () => {
       style={{ marginTop: 16 }}
     >
       {brands.map((item) => {
-        const isActive = item.id === active;
+        const isActive = item.id === selectedCategory;
         return (
           <TouchableOpacity
             key={item.id}
             style={[styles.pill, isActive && styles.pillActive]}
-            onPress={() => setActive(item.id)}
+            onPress={() => onSelectCategory(item.id)}
           >
             <Image source={item.image} style={styles.brandImage} resizeMode="contain" />
           </TouchableOpacity>
