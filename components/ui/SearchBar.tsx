@@ -3,11 +3,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  Platform,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useTheme } from "../../context/ThemeContext";
 
 interface SearchBarProps {
   initialValue?: string;
@@ -19,10 +21,11 @@ interface SearchBarProps {
 export default function SearchBar({
   initialValue = "",
   onSearch,
-  placeholder = "Looking for shoes",
+  placeholder = "Tìm kiếm sản phẩm...",
   autoFocus = false,
 }: SearchBarProps) {
   const router = useRouter();
+  const { colors } = useTheme();
   const [keyword, setKeyword] = useState(initialValue);
 
   const handleSearch = () => {
@@ -30,7 +33,6 @@ export default function SearchBar({
     if (onSearch) {
       onSearch(trimmedKeyword);
     } else if (trimmedKeyword) {
-      // Mặc định điều hướng đến trang products với keyword search
       router.push({
         pathname: "/products",
         params: { search: trimmedKeyword },
@@ -46,17 +48,17 @@ export default function SearchBar({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Search Icon */}
       <TouchableOpacity onPress={handleSearch} style={styles.searchIconBtn}>
-        <Ionicons name="search" size={20} color="#5B9EE1" />
+        <Ionicons name="search" size={20} color={colors.primary} />
       </TouchableOpacity>
 
       {/* Input */}
       <TextInput
-        style={styles.input}
+        style={[styles.input, { color: colors.text }]}
         placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={colors.placeholder}
         value={keyword}
         onChangeText={setKeyword}
         onSubmitEditing={handleSearch}
@@ -67,12 +69,15 @@ export default function SearchBar({
       {/* Clear Button */}
       {keyword.length > 0 && (
         <TouchableOpacity onPress={handleClear} style={styles.clearBtn}>
-          <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          <Ionicons name="close-circle" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       )}
 
       {/* Search Button */}
-      <TouchableOpacity onPress={handleSearch} style={styles.searchBtn}>
+      <TouchableOpacity
+        onPress={handleSearch}
+        style={[styles.searchBtn, { backgroundColor: colors.primary }]}
+      >
         <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
       </TouchableOpacity>
     </View>
@@ -85,16 +90,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 16,
-    backgroundColor: "#FFFFFF",
     paddingHorizontal: 14,
     paddingVertical: 10,
-    shadowColor: "#5B9EE1",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   searchIconBtn: {
     marginRight: 10,
@@ -102,7 +111,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 14,
-    color: "#111827",
     paddingVertical: 2,
   },
   clearBtn: {
@@ -110,7 +118,6 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   searchBtn: {
-    backgroundColor: "#5B9EE1",
     borderRadius: 10,
     width: 32,
     height: 32,

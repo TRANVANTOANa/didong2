@@ -6,9 +6,11 @@ import { SafeAreaView, StyleSheet, View } from "react-native";
 import HomeHeader from "../../components/home/HomeHeader";
 import ProductList from "../../components/product/ProductList";
 import DrawerMenu from "../../components/ui/DrawerMenu";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function ProductListScreen() {
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const { colors } = useTheme();
 
   // Tự động đóng drawer khi màn hình mất focus (chuyển trang)
   useFocusEffect(
@@ -20,13 +22,13 @@ export default function ProductListScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         {/* Header với menu button */}
         <HomeHeader onMenuPress={() => setDrawerVisible(true)} />
 
         {/* Nội dung trang Products */}
-        <View style={styles.content}>
+        <View style={[styles.content, { backgroundColor: colors.background }]}>
           <ProductList />
         </View>
       </SafeAreaView>
@@ -43,14 +45,11 @@ export default function ProductListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
   },
   safeArea: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
   },
   content: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
   },
 });

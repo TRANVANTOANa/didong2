@@ -7,6 +7,7 @@ import {
     ActivityIndicator,
     Dimensions,
     Image,
+    Platform,
     ScaledSize,
     ScrollView,
     StyleSheet,
@@ -14,6 +15,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useNotifications } from '../../context/NotificationContext';
+import { useTheme } from '../../context/ThemeContext';
 import { auth, db } from '../../firebase/firebaseConfig';
 
 interface MenuItem {
@@ -21,6 +24,7 @@ interface MenuItem {
     icon: keyof typeof Ionicons.glyphMap;
     title: string;
     subtitle: string;
+    badge?: number;
     onPress: () => void;
 }
 
@@ -33,6 +37,8 @@ interface UserProfile {
 
 export default function ProfileScreen(): React.JSX.Element {
     const router = useRouter();
+    const { colors, isDarkMode } = useTheme();
+    const { unreadCount } = useNotifications();
     const [dimensions, setDimensions] = useState<ScaledSize>(
         Dimensions.get('window')
     );
@@ -69,17 +75,17 @@ export default function ProfileScreen(): React.JSX.Element {
             if (userDoc.exists()) {
                 const data = userDoc.data();
                 setUserProfile({
-                    name: data.name || user.displayName || "Chưa cập nhật",
+                    name: data.name || user.displayName || "Not updated",
                     email: data.email || user.email || "",
-                    phone: data.phone || "Chưa cập nhật",
+                    phone: data.phone || "Not updated",
                     avatarUrl: data.avatarUrl || "",
                 });
             } else {
                 // Use data from Auth if no Firestore document
                 setUserProfile({
-                    name: user.displayName || "Chưa cập nhật",
+                    name: user.displayName || "Not updated",
                     email: user.email || "",
-                    phone: "Chưa cập nhật",
+                    phone: "Not updated",
                     avatarUrl: "",
                 });
             }
@@ -104,14 +110,14 @@ export default function ProfileScreen(): React.JSX.Element {
             id: 1,
             icon: 'person-outline',
             title: 'Edit Profile',
-            subtitle: 'Update your information',
+            subtitle: 'Update personal information',
             onPress: () => router.push('/account/edit-profile'),
         },
         {
             id: 2,
             icon: 'bag-outline',
             title: 'My Orders',
-            subtitle: 'View your order history',
+            subtitle: 'View order history',
             onPress: () => router.push('/account/my-orders'),
         },
         {
@@ -125,50 +131,50 @@ export default function ProfileScreen(): React.JSX.Element {
             id: 4,
             icon: 'location-outline',
             title: 'Delivery Address',
-            subtitle: 'Manage shipping addresses',
+            subtitle: 'Manage delivery addresses',
             onPress: () => router.push('/account/address'),
         },
         {
             id: 5,
             icon: 'card-outline',
             title: 'Payment Methods',
-            subtitle: 'Manage payment options',
-            // Sau này tạo màn payment-methods thì đổi lại path
+            subtitle: 'Manage cards and e-wallets',
             onPress: () => console.log('Payment Methods'),
         },
         {
             id: 6,
             icon: 'heart-outline',
-            title: 'Wishlist',
-            subtitle: 'Your favorite items',
+            title: 'Favorites',
+            subtitle: 'Saved products',
             onPress: () => router.push('/(main)/favorite'),
         },
         {
             id: 7,
             icon: 'notifications-outline',
             title: 'Notifications',
-            subtitle: 'Notification preferences',
-            onPress: () => console.log('Notifications'),
+            subtitle: unreadCount > 0 ? `${unreadCount} new notifications` : 'View all notifications',
+            badge: unreadCount,
+            onPress: () => router.push('/account/notifications'),
         },
         {
             id: 8,
             icon: 'settings-outline',
             title: 'Settings',
-            subtitle: 'App preferences',
+            subtitle: 'Dark mode, notifications, security',
             onPress: () => router.push('/account/settings'),
         },
         {
             id: 9,
             icon: 'help-circle-outline',
             title: 'Help & Support',
-            subtitle: 'Get help with your account',
+            subtitle: 'Contact support',
             onPress: () => console.log('Help'),
         },
         {
             id: 10,
-            icon: 'ticket-outline',
+            icon: 'gift-outline',
             title: 'Lucky Spin',
-            subtitle: 'View and save vouchers',
+            subtitle: 'Get free vouchers',
             onPress: () => router.push('/account/lucky-spin'),
         },
     ];
@@ -189,7 +195,6 @@ export default function ProfileScreen(): React.JSX.Element {
     // Render avatar based on avatarUrl
     const renderAvatar = () => {
         if (userProfile?.avatarUrl) {
-            // Check if it's a base64 string or URL
             return (
                 <Image
                     source={{ uri: userProfile.avatarUrl }}
@@ -198,7 +203,6 @@ export default function ProfileScreen(): React.JSX.Element {
                         { width: width * 0.22, height: width * 0.22 },
                     ]}
                     onError={() => {
-                        // If image fails to load, update profile to remove broken URL
                         setUserProfile(prev => prev ? { ...prev, avatarUrl: "" } : null);
                     }}
                 />
@@ -210,43 +214,62 @@ export default function ProfileScreen(): React.JSX.Element {
             <View style={[
                 styles.avatar,
                 styles.avatarPlaceholder,
-                { width: width * 0.22, height: width * 0.22 },
+                {
+                    width: width * 0.22,
+                    height: width * 0.22,
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.border,
+                },
             ]}>
-                <Ionicons name="person" size={40} color="#94A3B8" />
+                <Ionicons name="person" size={40} color={colors.textMuted} />
             </View>
         );
     };
 
     return (
-        <View style={styles.container}>
-            <StatusBar style="dark" />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar style={isDarkMode ? "light" : "dark"} />
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 100 }}
             >
                 {/* Header */}
-                <View style={[styles.header, { paddingTop: height * 0.06 }]}>
-                    <Text style={[styles.headerTitle, { fontSize: width * 0.065 }]}>
+                <View style={[styles.header, { paddingTop: height * 0.06, backgroundColor: colors.card }]}>
+                    <Text style={[styles.headerTitle, { fontSize: width * 0.065, color: colors.text }]}>
                         Profile
                     </Text>
+                    <TouchableOpacity
+                        style={[styles.themeToggle, { backgroundColor: colors.inputBackground }]}
+                        onPress={() => router.push('/account/settings')}
+                    >
+                        <Ionicons
+                            name={isDarkMode ? "moon" : "sunny"}
+                            size={20}
+                            color={isDarkMode ? "#60A5FA" : "#F59E0B"}
+                        />
+                    </TouchableOpacity>
                 </View>
 
                 {/* User Info Card */}
-                <View style={[styles.userCard, { marginHorizontal: width * 0.05 }]}>
+                <View style={[styles.userCard, { marginHorizontal: width * 0.05, backgroundColor: colors.card }]}>
                     <View style={styles.avatarContainer}>
                         {isLoading ? (
                             <View style={[
                                 styles.avatar,
                                 styles.avatarPlaceholder,
-                                { width: width * 0.22, height: width * 0.22 },
+                                {
+                                    width: width * 0.22,
+                                    height: width * 0.22,
+                                    backgroundColor: colors.inputBackground,
+                                },
                             ]}>
-                                <ActivityIndicator size="small" color="#5B9EE1" />
+                                <ActivityIndicator size="small" color={colors.primary} />
                             </View>
                         ) : (
                             renderAvatar()
                         )}
                         <TouchableOpacity
-                            style={styles.editAvatarBtn}
+                            style={[styles.editAvatarBtn, { backgroundColor: colors.primary }]}
                             onPress={handleEditProfile}
                         >
                             <Ionicons name="camera" size={18} color="#FFFFFF" />
@@ -256,19 +279,19 @@ export default function ProfileScreen(): React.JSX.Element {
                     <View style={styles.userInfo}>
                         {isLoading ? (
                             <>
-                                <View style={styles.loadingText} />
-                                <View style={[styles.loadingText, { width: '80%' }]} />
+                                <View style={[styles.loadingText, { backgroundColor: colors.inputBackground }]} />
+                                <View style={[styles.loadingText, { width: '80%', backgroundColor: colors.inputBackground }]} />
                             </>
                         ) : (
                             <>
-                                <Text style={[styles.userName, { fontSize: width * 0.055 }]}>
-                                    {userProfile?.name || "Chưa cập nhật"}
+                                <Text style={[styles.userName, { fontSize: width * 0.055, color: colors.text }]}>
+                                    {userProfile?.name || "Not updated"}
                                 </Text>
-                                <Text style={[styles.userEmail, { fontSize: width * 0.035 }]}>
+                                <Text style={[styles.userEmail, { fontSize: width * 0.035, color: colors.textSecondary }]}>
                                     {userProfile?.email || ""}
                                 </Text>
-                                <Text style={[styles.userPhone, { fontSize: width * 0.035 }]}>
-                                    {userProfile?.phone || "Chưa cập nhật"}
+                                <Text style={[styles.userPhone, { fontSize: width * 0.035, color: colors.textSecondary }]}>
+                                    {userProfile?.phone || "Not updated"}
                                 </Text>
                             </>
                         )}
@@ -278,7 +301,7 @@ export default function ProfileScreen(): React.JSX.Element {
                         style={styles.editProfileBtn}
                         onPress={handleEditProfile}
                     >
-                        <Ionicons name="create-outline" size={20} color="#5B9EE1" />
+                        <Ionicons name="create-outline" size={20} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
 
@@ -286,32 +309,38 @@ export default function ProfileScreen(): React.JSX.Element {
                 <View
                     style={[
                         styles.menuContainer,
-                        { marginTop: height * 0.03, marginHorizontal: width * 0.05 },
+                        { marginTop: height * 0.03, marginHorizontal: width * 0.05, backgroundColor: colors.card },
                     ]}
                 >
                     {menuItems.map((item) => (
                         <TouchableOpacity
                             key={item.id}
-                            style={[styles.menuItem, { paddingVertical: height * 0.02 }]}
+                            style={[styles.menuItem, { paddingVertical: height * 0.02, borderBottomColor: colors.divider }]}
                             onPress={item.onPress}
                             activeOpacity={0.7}
                         >
-                            <View style={styles.menuIconContainer}>
-                                <Ionicons name={item.icon} size={24} color="#5B9EE1" />
+                            <View style={[styles.menuIconContainer, { backgroundColor: colors.primaryLight }]}>
+                                <Ionicons name={item.icon} size={24} color={colors.primary} />
                             </View>
 
                             <View style={styles.menuTextContainer}>
-                                <Text style={[styles.menuTitle, { fontSize: width * 0.04 }]}>
+                                <Text style={[styles.menuTitle, { fontSize: width * 0.04, color: colors.text }]}>
                                     {item.title}
                                 </Text>
                                 <Text
-                                    style={[styles.menuSubtitle, { fontSize: width * 0.032 }]}
+                                    style={[styles.menuSubtitle, { fontSize: width * 0.032, color: colors.textMuted }]}
                                 >
                                     {item.subtitle}
                                 </Text>
                             </View>
 
-                            <Ionicons name="chevron-forward" size={20} color="#B0B0B0" />
+                            {item.badge && item.badge > 0 ? (
+                                <View style={styles.menuBadge}>
+                                    <Text style={styles.menuBadgeText}>{item.badge}</Text>
+                                </View>
+                            ) : (
+                                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+                            )}
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -339,7 +368,7 @@ export default function ProfileScreen(): React.JSX.Element {
                 <Text
                     style={[
                         styles.versionText,
-                        { fontSize: width * 0.03, marginTop: height * 0.02 },
+                        { fontSize: width * 0.03, marginTop: height * 0.02, color: colors.textMuted },
                     ]}
                 >
                     Version 1.0.0
@@ -352,52 +381,58 @@ export default function ProfileScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8F9FA',
     },
     header: {
         paddingHorizontal: 20,
         paddingBottom: 20,
-        backgroundColor: '#FFFFFF',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
     headerTitle: {
         fontWeight: 'bold',
-        color: '#1A2530',
+    },
+    themeToggle: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     userCard: {
-        backgroundColor: '#FFFFFF',
         borderRadius: 20,
         padding: 20,
         flexDirection: 'row',
         alignItems: 'center',
         marginTop: 20,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 3,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 8,
+            },
+            android: {
+                elevation: 3,
+            },
+        }),
     },
     avatarContainer: {
         position: 'relative',
     },
     avatar: {
         borderRadius: 50,
-        backgroundColor: '#E8ECEF',
     },
     avatarPlaceholder: {
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 2,
-        borderColor: '#E2E8F0',
         borderStyle: 'dashed',
     },
     editAvatarBtn: {
         position: 'absolute',
         bottom: 0,
         right: 0,
-        backgroundColor: '#5B9EE1',
         width: 32,
         height: 32,
         borderRadius: 16,
@@ -412,19 +447,14 @@ const styles = StyleSheet.create({
     },
     userName: {
         fontWeight: 'bold',
-        color: '#1A2530',
         marginBottom: 4,
     },
     userEmail: {
-        color: '#778899',
         marginBottom: 2,
     },
-    userPhone: {
-        color: '#778899',
-    },
+    userPhone: {},
     loadingText: {
         height: 16,
-        backgroundColor: '#E2E8F0',
         borderRadius: 4,
         marginBottom: 8,
         width: '60%',
@@ -433,7 +463,6 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     menuContainer: {
-        backgroundColor: '#FFFFFF',
         borderRadius: 20,
         overflow: 'hidden',
     },
@@ -442,13 +471,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#F0F0F0',
     },
     menuIconContainer: {
         width: 40,
         height: 40,
-        borderRadius: 20,
-        backgroundColor: '#F0F7FF',
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -458,27 +485,41 @@ const styles = StyleSheet.create({
     },
     menuTitle: {
         fontWeight: '600',
-        color: '#1A2530',
         marginBottom: 3,
     },
-    menuSubtitle: {
-        color: '#9CA3AF',
+    menuSubtitle: {},
+    menuBadge: {
+        backgroundColor: '#EF4444',
+        minWidth: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 6,
+    },
+    menuBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
     logoutBtn: {
         backgroundColor: '#DC3545',
-        borderRadius: 25,
+        borderRadius: 16,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         gap: 10,
-        shadowColor: '#DC3545',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#DC3545',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+            },
+            android: {
+                elevation: 5,
+            },
+        }),
     },
     logoutText: {
         color: '#FFFFFF',
@@ -486,7 +527,6 @@ const styles = StyleSheet.create({
     },
     versionText: {
         textAlign: 'center',
-        color: '#B0B0B0',
         marginBottom: 20,
     },
 });

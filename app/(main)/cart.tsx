@@ -1,9 +1,10 @@
-// app/(main)/cart.tsx
+  // app/(main)/cart.tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useCart } from "../../context/CartContext";
+import { useTheme } from "../../context/ThemeContext";
 import storage from "../../utils/storage";
 
 interface AppliedVoucher {
@@ -23,6 +25,7 @@ interface AppliedVoucher {
 export default function CartScreen() {
   const router = useRouter();
   const { items, changeQty, removeItem } = useCart();
+  const { colors, isDarkMode } = useTheme();
   const [selectedVoucher, setSelectedVoucher] = useState<AppliedVoucher | null>(null);
 
   // Load voucher from AsyncStorage when screen loads
@@ -67,64 +70,64 @@ export default function CartScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.headerRow}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: colors.card }]}
           onPress={() => router.back()}
         >
-          <Ionicons name="chevron-back" size={20} color="#0F172A" />
+          <Ionicons name="chevron-back" size={20} color={colors.icon} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Cart</Text>
-        <View style={styles.cartBadge}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Cart</Text>
+        <View style={[styles.cartBadge, { backgroundColor: colors.primary }]}>
           <Text style={styles.cartBadgeText}>{items.length}</Text>
         </View>
       </View>
 
-      {/* Chỉ còn phần Shopping Cart nằm trong ScrollView */}
+      {/* Shopping Cart ScrollView */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{
-          paddingBottom: items.length > 0 ? 200 : 24, // chừa chỗ cho Order Summary
+          paddingBottom: items.length > 0 ? 200 : 24,
         }}
         showsVerticalScrollIndicator={false}
       >
         {/* Cart Items Card */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
           <View style={styles.cardHeader}>
-            <Ionicons name="bag-outline" size={18} color="#5B9EE1" />
-            <Text style={styles.cardHeaderText}>Shopping Cart</Text>
+            <Ionicons name="bag-outline" size={18} color={colors.primary} />
+            <Text style={[styles.cardHeaderText, { color: colors.text }]}>Products</Text>
           </View>
 
           {/* Cart Items List */}
           {items.map((item) => (
             <View
               key={`${item.id}-${item.size}`}
-              style={styles.cartRow}
+              style={[styles.cartRow, { borderBottomColor: colors.divider }]}
             >
-              <View style={styles.itemImageContainer}>
+              <View style={[styles.itemImageContainer, { backgroundColor: colors.inputBackground }]}>
                 <Image source={item.image} style={styles.itemImage} resizeMode="contain" />
               </View>
 
               <View style={styles.itemInfo}>
-                <Text style={styles.itemName} numberOfLines={1}>
+                <Text style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>
                   {item.name}
                 </Text>
-                <Text style={styles.itemSize}>Size: {item.size}</Text>
-                <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
+                <Text style={[styles.itemSize, { color: colors.textMuted }]}>Size: {item.size}</Text>
+                <Text style={[styles.itemPrice, { color: colors.primary }]}>${item.price.toFixed(2)}</Text>
 
                 {/* Quantity Controls */}
                 <View style={styles.qtyRow}>
                   <TouchableOpacity
-                    style={styles.qtyButton}
+                    style={[styles.qtyButton, { backgroundColor: colors.inputBackground }]}
                     onPress={() => changeQty(item.id, item.size, -1)}
                   >
-                    <Ionicons name="remove" size={16} color="#64748B" />
+                    <Ionicons name="remove" size={16} color={colors.textSecondary} />
                   </TouchableOpacity>
-                  <Text style={styles.qtyValue}>{item.qty}</Text>
+                  <Text style={[styles.qtyValue, { color: colors.text }]}>{item.qty}</Text>
                   <TouchableOpacity
-                    style={[styles.qtyButton, styles.qtyButtonActive]}
+                    style={[styles.qtyButton, { backgroundColor: colors.primary }]}
                     onPress={() => changeQty(item.id, item.size, +1)}
                   >
                     <Ionicons name="add" size={16} color="#FFFFFF" />
@@ -145,16 +148,16 @@ export default function CartScreen() {
           {/* Empty Cart State */}
           {items.length === 0 && (
             <View style={styles.emptyContainer}>
-              <Ionicons name="cart-outline" size={64} color="#E2E8F0" />
-              <Text style={styles.emptyTitle}>Your cart is empty</Text>
-              <Text style={styles.emptySubtitle}>
-                Add some products to your cart
+              <Ionicons name="cart-outline" size={64} color={colors.textMuted} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Your cart is empty</Text>
+              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                Add items to your cart to checkout
               </Text>
               <TouchableOpacity
-                style={styles.shopButton}
+                style={[styles.shopButton, { backgroundColor: colors.primary }]}
                 onPress={() => router.push("/products")}
               >
-                <Text style={styles.shopButtonText}>Start Shopping</Text>
+                <Text style={styles.shopButtonText}>Shop Now</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -162,10 +165,10 @@ export default function CartScreen() {
 
         {/* Voucher Card */}
         {items.length > 0 && (
-          <View style={[styles.card, styles.voucherCard]}>
+          <View style={[styles.card, styles.voucherCard, { backgroundColor: colors.card }]}>
             <View style={styles.cardHeader}>
               <Ionicons name="pricetag-outline" size={18} color="#10B981" />
-              <Text style={styles.cardHeaderText}>Apply Voucher</Text>
+              <Text style={[styles.cardHeaderText, { color: colors.text }]}>Voucher</Text>
             </View>
 
             {selectedVoucher ? (
@@ -178,7 +181,7 @@ export default function CartScreen() {
                   <Text style={styles.voucherDiscountText}>
                     -{selectedVoucher.discountType === "PERCENTAGE"
                       ? `${selectedVoucher.discount}%`
-                      : `$${selectedVoucher.discount.toFixed(2)}`} discount applied
+                      : `$${selectedVoucher.discount.toFixed(2)}`} applied
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -190,39 +193,39 @@ export default function CartScreen() {
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.selectVoucherBtn}
+                style={[styles.selectVoucherBtn, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}
                 onPress={() => router.push("/account/vouchers")}
               >
                 <View style={styles.selectVoucherContent}>
-                  <Ionicons name="ticket-outline" size={20} color="#5B9EE1" />
-                  <Text style={styles.selectVoucherText}>Select a voucher</Text>
+                  <Ionicons name="ticket-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.selectVoucherText, { color: colors.primary }]}>Select Voucher</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               </TouchableOpacity>
             )}
           </View>
         )}
       </ScrollView>
 
-      {/* Order Summary cố định dưới đáy màn hình */}
+      {/* Order Summary */}
       {items.length > 0 && (
         <View style={styles.summaryContainer}>
-          <View style={[styles.card, styles.summaryCard]}>
+          <View style={[styles.card, styles.summaryCard, { backgroundColor: colors.card }]}>
             <View style={styles.cardHeader}>
-              <Ionicons name="receipt-outline" size={18} color="#5B9EE1" />
-              <Text style={styles.cardHeaderText}>Order Summary</Text>
+              <Ionicons name="receipt-outline" size={18} color={colors.primary} />
+              <Text style={[styles.cardHeaderText, { color: colors.text }]}>Order Summary</Text>
             </View>
 
             <View style={styles.summaryBox}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Subtotal</Text>
-                <Text style={styles.summaryValue}>
+                <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Subtotal</Text>
+                <Text style={[styles.summaryValue, { color: colors.text }]}>
                   ${subtotal.toFixed(2)}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Shipping</Text>
-                <Text style={styles.summaryValue}>
+                <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Shipping Fee</Text>
+                <Text style={[styles.summaryValue, { color: colors.text }]}>
                   ${shipping.toFixed(2)}
                 </Text>
               </View>
@@ -236,17 +239,17 @@ export default function CartScreen() {
                   </Text>
                 </View>
               )}
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: colors.divider }]} />
               <View style={styles.summaryRow}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>
+                <Text style={[styles.totalLabel, { color: colors.text }]}>Total</Text>
+                <Text style={[styles.totalValue, { color: colors.primary }]}>
                   ${total.toFixed(2)}
                 </Text>
               </View>
             </View>
 
             <TouchableOpacity
-              style={styles.checkoutButton}
+              style={[styles.checkoutButton, { backgroundColor: colors.primary }]}
               onPress={handleCheckout}
             >
               <Ionicons
@@ -255,7 +258,7 @@ export default function CartScreen() {
                 color="#FFFFFF"
                 style={{ marginRight: 8 }}
               />
-              <Text style={styles.checkoutText}>Proceed to Checkout</Text>
+              <Text style={styles.checkoutText}>Checkout</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -267,7 +270,6 @@ export default function CartScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
     paddingTop: 50,
     paddingHorizontal: 16,
   },
@@ -283,24 +285,27 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   headerTitle: {
     flex: 1,
     fontSize: 20,
     fontWeight: "700",
-    color: "#0F172A",
     marginLeft: 12,
   },
   cartBadge: {
-    backgroundColor: "#5B9EE1",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -312,13 +317,18 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
     padding: 16,
-    shadowColor: "#5B9EE1",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   cardHeader: {
     flexDirection: "row",
@@ -329,20 +339,17 @@ const styles = StyleSheet.create({
   cardHeaderText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#0F172A",
   },
   cartRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
   },
   itemImageContainer: {
     width: 70,
     height: 70,
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -357,18 +364,15 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#0F172A",
     marginBottom: 2,
   },
   itemSize: {
     fontSize: 12,
-    color: "#94A3B8",
     marginBottom: 4,
   },
   itemPrice: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#5B9EE1",
     marginBottom: 8,
   },
   qtyRow: {
@@ -379,18 +383,13 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
-  },
-  qtyButtonActive: {
-    backgroundColor: "#5B9EE1",
   },
   qtyValue: {
     marginHorizontal: 14,
     fontSize: 14,
     fontWeight: "600",
-    color: "#0F172A",
   },
   deleteButton: {
     width: 40,
@@ -408,20 +407,17 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0F172A",
     marginTop: 16,
     marginBottom: 4,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: "#64748B",
     marginBottom: 20,
   },
   shopButton: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#5B9EE1",
   },
   shopButtonText: {
     fontSize: 14,
@@ -433,7 +429,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 16,
     right: 16,
-    bottom: 24, // có thể chỉnh lại cho hợp với tab bar / safe area
+    bottom: 24,
   },
   summaryCard: {
     marginTop: 0,
@@ -448,40 +444,40 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 14,
-    color: "#64748B",
   },
   summaryValue: {
     fontSize: 14,
-    color: "#0F172A",
   },
   divider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
     marginVertical: 10,
   },
   totalLabel: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
   },
   totalValue: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#5B9EE1",
   },
   checkoutButton: {
     flexDirection: "row",
     marginTop: 16,
     borderRadius: 14,
-    backgroundColor: "#5B9EE1",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 14,
-    shadowColor: "#5B9EE1",
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#5B9EE1",
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   checkoutText: {
     fontSize: 16,
@@ -498,10 +494,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: "#F0F7FF",
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: "#5B9EE1",
     borderStyle: "dashed",
   },
   selectVoucherContent: {
@@ -512,7 +506,6 @@ const styles = StyleSheet.create({
   selectVoucherText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#5B9EE1",
   },
   appliedVoucherContainer: {
     flexDirection: "row",

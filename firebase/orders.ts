@@ -1,6 +1,6 @@
 // firebase/orders.ts
 // Helper functions for managing orders in Firestore
-import { addDoc, collection, getDocs, query, Timestamp, where } from "firebase/firestore";
+import { addDoc, collection, doc, getDocs, query, Timestamp, updateDoc, where } from "firebase/firestore";
 import { auth, db } from "./firebaseConfig";
 
 // Order item type (sản phẩm trong đơn hàng)
@@ -28,6 +28,11 @@ export type Order = {
     address: string;
     paymentMethod: "cod" | "card" | "momo";
     createdAt: Date;
+    review?: {
+        rating: number;
+        comment: string;
+        createdAt: Date;
+    };
 };
 
 /**
@@ -105,6 +110,10 @@ export async function fetchUserOrders(): Promise<Order[]> {
             address: data.address || "",
             paymentMethod: data.paymentMethod || "cod",
             createdAt: data.createdAt?.toDate() || new Date(),
+            review: data.review ? {
+                ...data.review,
+                createdAt: data.review.createdAt?.toDate() || new Date()
+            } : undefined,
         });
     });
 
@@ -112,4 +121,105 @@ export async function fetchUserOrders(): Promise<Order[]> {
     orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     return orders;
+}
+
+/**
+ * Cancel an order
+ * @param orderId Document ID of the order to cancel
+ */
+export async function cancelOrder(orderId: string): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not authenticated");
+
+    const orderRef = doc(db, "orders", orderId);
+    await updateDoc(orderRef, {
+        status: "Cancelled"
+    });
+}
+
+/**
+ * Submit a review for an order
+ */
+export async function submitOrderReview(orderId: string, review: { rating: number, comment: string }): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not authenticated");
+
+    const timestamp = Timestamp.now();
+
+    // 1. Save to separate reviews collection (Correct Structure)
+    await addDoc(collection(db, "reviews"), {
+        userId: user.uid,
+        orderId: orderId,
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: timestamp,
+        userEmail: user.email // Optional: store email for admin convenience
+    });
+
+    // 2. Update order document (for UI convenience/denormalization)
+    const orderRef = doc(db, "orders", orderId);
+    await updateDoc(orderRef, {
+        review: {
+            ...review,
+            createdAt: timestamp
+        }
+    });
+}
+
+// Review type for product reviews
+export type ProductReview = {
+    id: string;
+    userId: string;
+    userEmail?: string;
+    orderId: string;
+    productId?: string;
+    rating: number;
+    comment: string;
+    createdAt: Date;
+};
+
+/**
+ * Fetch reviews for a specific product
+ * @param productId - Product ID to fetch reviews for
+ * @returns Array of reviews sorted by date (newest first)
+ */
+export async function fetchProductReviews(productId: string): Promise<ProductReview[]> {
+    const reviewsRef = collection(db, "reviews");
+    const snapshot = await getDocs(reviewsRef);
+    const reviews: ProductReview[] = [];
+
+    // Get all orders to match productId with orderId
+    const ordersRef = collection(db, "orders");
+    const ordersSnapshot = await getDocs(ordersRef);
+
+    // Create a map of orderId -> productIds in that order
+    const orderProductMap: Record<string, string[]> = {};
+    ordersSnapshot.forEach((doc) => {
+        const data = doc.data();
+        const productIds = (data.items || []).map((item: { id: string }) => item.id);
+        orderProductMap[doc.id] = productIds;
+    });
+
+    snapshot.forEach((doc) => {
+        const data = doc.data();
+        // Check if this review's order contains the product
+        const orderProducts = orderProductMap[data.orderId] || [];
+        if (orderProducts.includes(productId)) {
+            reviews.push({
+                id: doc.id,
+                userId: data.userId,
+                userEmail: data.userEmail,
+                orderId: data.orderId,
+                productId: productId,
+                rating: data.rating,
+                comment: data.comment,
+                createdAt: data.createdAt?.toDate() || new Date(),
+            });
+        }
+    });
+
+    // Sort by createdAt (newest first)
+    reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    return reviews;
 }

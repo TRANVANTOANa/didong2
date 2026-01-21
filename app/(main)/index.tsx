@@ -4,6 +4,7 @@ import React, { useCallback, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 
 import CategoryTabs from "../../components/home/CategoryTabs";
+import FloatingLuckySpin from "../../components/home/FloatingLuckySpin";
 import HomeBanner from "../../components/home/HomeBanner";
 import HomeHeader from "../../components/home/HomeHeader";
 import HomeNewArrivalSection from "../../components/home/HomeNewArrivalSection";
@@ -11,6 +12,7 @@ import HomePopularSection from "../../components/home/HomePopularSection";
 import HomeVoucherSection from "../../components/home/HomeVoucherSection";
 import DrawerMenu from "../../components/ui/DrawerMenu";
 import SearchBar from "../../components/ui/SearchBar";
+import { useTheme } from "../../context/ThemeContext";
 
 import ProductList from "../../components/product/ProductList";
 
@@ -19,6 +21,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("Nike");
   const [searchQuery, setSearchQuery] = useState("");
+  const { colors } = useTheme();
 
   // Tự động đóng drawer khi màn hình mất focus (chuyển trang)
   useFocusEffect(
@@ -31,14 +34,13 @@ export default function HomeScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    // Simulate data refresh
     setTimeout(() => {
       setRefreshing(false);
     }, 1500);
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header with menu button */}
       <HomeHeader onMenuPress={() => setDrawerVisible(true)} />
 
@@ -65,8 +67,8 @@ export default function HomeScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#5B9EE1"]}
-              tintColor="#5B9EE1"
+              colors={[colors.primary]}
+              tintColor={colors.primary}
             />
           }
         >
@@ -90,11 +92,13 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
-      {/* Drawer Menu - slides from left with overlay */}
       <DrawerMenu
         visible={drawerVisible}
         onClose={() => setDrawerVisible(false)}
       />
+
+      {/* Floating Lucky Spin Widget */}
+      <FloatingLuckySpin />
     </View>
   );
 }
@@ -102,7 +106,6 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
   },
   scrollContent: {
     paddingHorizontal: 16,

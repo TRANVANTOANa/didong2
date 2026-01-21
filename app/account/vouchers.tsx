@@ -101,7 +101,7 @@ export default function VouchersScreen() {
             setVouchers(voucherList);
         } catch (error) {
             console.error("Error fetching vouchers:", error);
-            Alert.alert("Lỗi", "Không thể tải danh sách voucher");
+            Alert.alert("Error", "Unable to load voucher list");
         } finally {
             setLoading(false);
         }

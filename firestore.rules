@@ -12,6 +12,16 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // Cho phép đọc/ghi orders
+    match /orders/{orderId} {
+      allow read, write: if true;
+    }
+
+    // Cho phép đọc/ghi reviews
+    match /reviews/{reviewId} {
+      allow read, write: if true;
+    }
+
     // Cho phép lưu chat history
     // (Tạm thời allow all để test, sau này nên check auth)
     match /chatHistory/{document=**} {

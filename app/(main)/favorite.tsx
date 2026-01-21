@@ -5,24 +5,24 @@ import { SafeAreaView, StyleSheet, View } from "react-native";
 import HomeHeader from "../../components/home/HomeHeader";
 import FavoriteProductsSection from "../../components/product/FavoriteProductsSection";
 import DrawerMenu from "../../components/ui/DrawerMenu";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function FavoriteScreen() {
     const [drawerVisible, setDrawerVisible] = useState(false);
+    const { colors } = useTheme();
 
     // Tự động đóng drawer khi màn hình mất focus (chuyển trang)
     useFocusEffect(
         useCallback(() => {
-            // Khi màn hình được focus thì không làm gì
             return () => {
-                // Khi màn hình mất focus thì đóng drawer
                 setDrawerVisible(false);
             };
         }, [])
     );
 
     return (
-        <View style={styles.container}>
-            <SafeAreaView style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
                 {/* Header với menu button */}
                 <HomeHeader onMenuPress={() => setDrawerVisible(true)} />
 
@@ -42,6 +42,5 @@ export default function FavoriteScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#F8FAFC",
     },
 });

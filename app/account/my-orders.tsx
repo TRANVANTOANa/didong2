@@ -5,18 +5,20 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     Image,
+    Modal,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
-import { Order, fetchUserOrders } from "../../firebase/orders";
+import { Order, cancelOrder, fetchUserOrders, submitOrderReview } from "../../firebase/orders";
 
 type OrderStatus = "Processing" | "Shipped" | "Delivered" | "Cancelled";
-
 const STATUS_LABEL: Record<OrderStatus, string> = {
     Processing: "Processing",
     Shipped: "Shipped",
@@ -24,13 +26,41 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
     Cancelled: "Cancelled",
 };
 
+type TabType = "all" | "processing" | "shipped" | "delivered" | "review" | "cancelled";
+
+const TABS: { key: TabType; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "processing", label: "Processing" },
+    { key: "shipped", label: "Shipped" },
+    { key: "delivered", label: "Delivered" },
+    { key: "review", label: "To Review" },
+    { key: "cancelled", label: "Cancelled" },
+];
+
 export default function MyOrdersScreen() {
     const router = useRouter();
     const navigation = useNavigation();
-    const [filter, setFilter] = useState<OrderStatus | "all">("all");
+    const [activeTab, setActiveTab] = useState<TabType>("all");
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [reviewModalVisible, setReviewModalVisible] = useState(false);
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [rating, setRating] = useState(5);
+    const [comment, setComment] = useState("");
+    const [submittingReview, setSubmittingReview] = useState(false);
+
+    const [cancelModalVisible, setCancelModalVisible] = useState(false);
+    const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+
+    // View Review Modal
+    const [viewReviewModalVisible, setViewReviewModalVisible] = useState(false);
+    const [orderToViewReview, setOrderToViewReview] = useState<Order | null>(null);
+
+    const handleViewReview = (order: Order) => {
+        setOrderToViewReview(order);
+        setViewReviewModalVisible(true);
+    };
 
     // Handle back button - go home if no history
     const handleBack = () => {
@@ -63,9 +93,23 @@ export default function MyOrdersScreen() {
     }, [loadOrders]);
 
     const filteredOrders = useMemo(() => {
-        if (filter === "all") return orders;
-        return orders.filter((o) => o.status === filter);
-    }, [filter, orders]);
+        switch (activeTab) {
+            case "processing":
+                return orders.filter((o) => o.status === "Processing");
+            case "shipped":
+                return orders.filter((o) => o.status === "Shipped");
+            case "delivered":
+                // Chỉ hiển thị đơn đã giao nhưng CHƯA đánh giá
+                return orders.filter((o) => o.status === "Delivered" && !o.review);
+            case "review":
+                // Hiển thị tất cả đơn đã giao (để xem đánh giá hoặc viết đánh giá)
+                return orders.filter((o) => o.status === "Delivered");
+            case "cancelled":
+                return orders.filter((o) => o.status === "Cancelled");
+            default:
+                return orders.filter((o) => o.status !== "Cancelled");
+        }
+    }, [activeTab, orders]);
 
     // Format date
     const formatDate = (date: Date): string => {
@@ -86,6 +130,55 @@ export default function MyOrdersScreen() {
                 status: order.status.toLowerCase(),
             },
         });
+    };
+
+    const handleCancelPress = (order: Order) => {
+        setOrderToCancel(order);
+        setCancelModalVisible(true);
+    };
+
+    const confirmCancelOrder = async () => {
+        if (!orderToCancel?.id) return;
+
+        try {
+            setLoading(true);
+            setCancelModalVisible(false); // Close modal first
+            await cancelOrder(orderToCancel.id);
+            await loadOrders();
+            // Optional: Show success toast/alert if needed, but UI update is usually enough
+        } catch (e) {
+            Alert.alert("Error", "Failed to cancel order. Please try again.");
+            console.error(e);
+        } finally {
+            setLoading(false);
+            setOrderToCancel(null);
+        }
+    };
+
+    const handleOpenReview = (order: Order) => {
+        setSelectedOrder(order);
+        setRating(5);
+        setComment("");
+        setReviewModalVisible(true);
+    };
+
+    const handleSubmitReview = async () => {
+        if (!selectedOrder?.id) return;
+        if (!comment.trim()) {
+            Alert.alert("Required", "Please write a comment.");
+            return;
+        }
+        try {
+            setSubmittingReview(true);
+            await submitOrderReview(selectedOrder.id, { rating, comment });
+            setReviewModalVisible(false);
+            await loadOrders();
+            Alert.alert("Success", "Thank you for your review!");
+        } catch (e) {
+            Alert.alert("Error", "Failed to submit review.");
+        } finally {
+            setSubmittingReview(false);
+        }
     };
 
     if (loading) {
@@ -127,65 +220,101 @@ export default function MyOrdersScreen() {
                 </View>
 
                 <View style={styles.filterRow}>
-                    {["all", "Processing", "Shipped", "Delivered"].map((k) => {
-                        const isActive = filter === k;
-                        return (
-                            <TouchableOpacity
-                                key={k}
-                                style={[styles.filterChip, isActive && styles.filterChipActive]}
-                                onPress={() => setFilter(k as any)}
-                            >
-                                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                                    {k === "all" ? "All" : k}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+                        {TABS.map((tab) => {
+                            const isActive = activeTab === tab.key;
+                            return (
+                                <TouchableOpacity
+                                    key={tab.key}
+                                    style={[styles.filterChip, isActive && styles.filterChipActive]}
+                                    onPress={() => setActiveTab(tab.key)}
+                                >
+                                    <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                                        {tab.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
                 </View>
 
                 {filteredOrders.map((order) => (
-                    <TouchableOpacity key={order.id} style={styles.orderCard} onPress={() => handleOpenOrder(order)}>
-                        <View style={styles.orderHeaderRow}>
-                            <View style={{ flexDirection: "row", alignItems: "center" }}>
-                                {/* Show first product image or icon */}
-                                {order.items[0]?.imageUrl ? (
-                                    <Image
-                                        source={{ uri: order.items[0].imageUrl }}
-                                        style={styles.orderImage}
-                                        resizeMode="cover"
-                                    />
-                                ) : (
-                                    <View style={styles.orderIconCircle}>
-                                        <Ionicons name="receipt-outline" size={20} color="#5B9EE1" />
+                    <View key={order.id} style={styles.orderCard}>
+                        <TouchableOpacity onPress={() => handleOpenOrder(order)}>
+                            <View style={styles.orderHeaderRow}>
+                                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                                    {/* Show first product image or icon */}
+                                    {order.items[0]?.imageUrl ? (
+                                        <Image
+                                            source={{ uri: order.items[0].imageUrl }}
+                                            style={styles.orderImage}
+                                            resizeMode="cover"
+                                        />
+                                    ) : (
+                                        <View style={styles.orderIconCircle}>
+                                            <Ionicons name="receipt-outline" size={20} color="#5B9EE1" />
+                                        </View>
+                                    )}
+                                    <View style={{ marginLeft: 10 }}>
+                                        <Text style={styles.orderIdText}>Order {order.orderId}</Text>
+                                        <Text style={styles.orderDateText}>{formatDate(order.createdAt)}</Text>
                                     </View>
-                                )}
-                                <View style={{ marginLeft: 10 }}>
-                                    <Text style={styles.orderIdText}>Order {order.orderId}</Text>
-                                    <Text style={styles.orderDateText}>{formatDate(order.createdAt)}</Text>
+                                </View>
+
+                                <View style={[styles.statusBadge, getStatusBadgeStyle(order.status)]}>
+                                    <Text style={[styles.statusText, getStatusTextStyle(order.status)]}>
+                                        {STATUS_LABEL[order.status]}
+                                    </Text>
                                 </View>
                             </View>
 
-                            <View style={[styles.statusBadge, getStatusBadgeStyle(order.status)]}>
-                                <Text style={[styles.statusText, getStatusTextStyle(order.status)]}>
-                                    {STATUS_LABEL[order.status]}
-                                </Text>
-                            </View>
-                        </View>
+                            <View style={styles.orderBottomRow}>
+                                <View>
+                                    <Text style={styles.orderLabel}>
+                                        {order.items.length} item{order.items.length > 1 ? "s" : ""}
+                                    </Text>
+                                    <Text style={styles.orderTotal}>${order.total.toFixed(2)}</Text>
+                                </View>
 
-                        <View style={styles.orderBottomRow}>
-                            <View>
-                                <Text style={styles.orderLabel}>
-                                    {order.items.length} item{order.items.length > 1 ? "s" : ""}
-                                </Text>
-                                <Text style={styles.orderTotal}>${order.total.toFixed(2)}</Text>
+                                <View style={styles.orderCTA}>
+                                    <Text style={styles.orderCTAText}>View details</Text>
+                                    <Ionicons name="chevron-forward" size={16} color="#3B82F6" style={{ marginLeft: 4 }} />
+                                </View>
                             </View>
+                        </TouchableOpacity>
 
-                            <View style={styles.orderCTA}>
-                                <Text style={styles.orderCTAText}>View details</Text>
-                                <Ionicons name="chevron-forward" size={16} color="#3B82F6" style={{ marginLeft: 4 }} />
+                        {/* Actions Row */}
+                        {(order.status === "Processing" || (order.status === "Delivered" && !order.review)) && (
+                            <View style={styles.actionRow}>
+                                {order.status === "Processing" && (
+                                    <TouchableOpacity style={styles.cancelButton} onPress={() => handleCancelPress(order)}>
+                                        <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                                    </TouchableOpacity>
+                                )}
+                                {order.status === "Delivered" && !order.review && (
+                                    <TouchableOpacity style={styles.reviewButton} onPress={() => handleOpenReview(order)}>
+                                        <Text style={styles.reviewButtonText}>Write Review</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
-                        </View>
-                    </TouchableOpacity>
+                        )}
+                        {/* Show reviewed badge if reviewed - tappable to view full review */}
+                        {order.status === "Delivered" && order.review && (
+                            <TouchableOpacity
+                                style={styles.reviewedBadgeRow}
+                                onPress={() => handleViewReview(order)}
+                            >
+                                <View style={styles.reviewedBadge}>
+                                    <Ionicons name="star" size={12} color="#F59E0B" />
+                                    <Text style={styles.reviewedText}>Rated {order.review.rating}/5</Text>
+                                </View>
+                                <View style={styles.viewReviewButton}>
+                                    <Text style={styles.viewReviewButtonText}>View Review</Text>
+                                    <Ionicons name="chevron-forward" size={14} color="#5B9EE1" />
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 ))}
 
                 {filteredOrders.length === 0 && !loading && (
@@ -208,6 +337,156 @@ export default function MyOrdersScreen() {
                     </View>
                 )}
             </ScrollView>
+
+            {/* Review Modal */}
+            <Modal
+                visible={reviewModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setReviewModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Rate & Review</Text>
+                        <Text style={styles.modalSubtitle}>How was your experience?</Text>
+
+                        <View style={styles.starsRow}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <TouchableOpacity key={star} onPress={() => setRating(star)}>
+                                    <Ionicons
+                                        name={star <= rating ? "star" : "star-outline"}
+                                        size={32}
+                                        color="#F59E0B"
+                                        style={{ marginHorizontal: 4 }}
+                                    />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <TextInput
+                            style={styles.commentInput}
+                            placeholder="Write your review here..."
+                            multiline
+                            numberOfLines={4}
+                            value={comment}
+                            onChangeText={setComment}
+                            textAlignVertical="top"
+                        />
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelModalButton]}
+                                onPress={() => setReviewModalVisible(false)}
+                            >
+                                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.submitModalButton]}
+                                onPress={handleSubmitReview}
+                                disabled={submittingReview}
+                            >
+                                {submittingReview ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <Text style={styles.submitModalButtonText}>Submit</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Cancel Confirmation Modal */}
+            <Modal
+                visible={cancelModalVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setCancelModalVisible(false)}
+            >
+                <View style={[styles.modalOverlay, { justifyContent: 'center' }]}>
+                    <View style={[styles.modalContent, { borderRadius: 20, minHeight: 'auto', paddingBottom: 20 }]}>
+                        <Text style={[styles.modalTitle, { color: '#EF4444' }]}>Cancel Order?</Text>
+                        <Text style={styles.modalSubtitle}>
+                            Are you sure you want to cancel this order? This action cannot be undone.
+                        </Text>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelModalButton]}
+                                onPress={() => setCancelModalVisible(false)}
+                            >
+                                <Text style={styles.cancelModalButtonText}>No, Keep it</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, { backgroundColor: '#EF4444' }]}
+                                onPress={confirmCancelOrder}
+                            >
+                                <Text style={styles.submitModalButtonText}>Yes, Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* View Review Modal */}
+            <Modal
+                visible={viewReviewModalVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setViewReviewModalVisible(false)}
+            >
+                <View style={[styles.modalOverlay, { justifyContent: 'center' }]}>
+                    <View style={[styles.modalContent, styles.viewReviewModalContent]}>
+                        <TouchableOpacity
+                            style={styles.closeModalButton}
+                            onPress={() => setViewReviewModalVisible(false)}
+                        >
+                            <Ionicons name="close" size={24} color="#64748B" />
+                        </TouchableOpacity>
+
+                        <Text style={styles.modalTitle}>Your Review</Text>
+                        <Text style={styles.modalSubtitle}>Order {orderToViewReview?.orderId}</Text>
+
+                        {/* Stars Display */}
+                        <View style={styles.starsRow}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <Ionicons
+                                    key={star}
+                                    name={star <= (orderToViewReview?.review?.rating || 0) ? "star" : "star-outline"}
+                                    size={32}
+                                    color="#F59E0B"
+                                    style={{ marginHorizontal: 4 }}
+                                />
+                            ))}
+                        </View>
+                        <Text style={styles.ratingText}>
+                            {orderToViewReview?.review?.rating}/5 Stars
+                        </Text>
+
+                        {/* Comment Display */}
+                        <View style={styles.commentDisplay}>
+                            <Ionicons name="chatbubble-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                            <Text style={styles.commentDisplayText}>
+                                {orderToViewReview?.review?.comment || "No comment provided."}
+                            </Text>
+                        </View>
+
+                        {/* Review Date */}
+                        {orderToViewReview?.review?.createdAt && (
+                            <Text style={styles.reviewDate}>
+                                Reviewed on {formatDate(orderToViewReview.review.createdAt)}
+                            </Text>
+                        )}
+
+                        <TouchableOpacity
+                            style={[styles.modalButton, styles.submitModalButton, { marginTop: 20 }]}
+                            onPress={() => setViewReviewModalVisible(false)}
+                        >
+                            <Text style={styles.submitModalButtonText}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -241,8 +520,8 @@ const styles = StyleSheet.create({
     summaryCard: { borderRadius: 20, backgroundColor: "#FFFFFF", padding: 16, marginBottom: 12 },
     summaryTitle: { fontSize: 18, fontWeight: "700", color: "#0F172A" },
     summarySubtitle: { fontSize: 13, color: "#64748B" },
-    filterRow: { flexDirection: "row", marginBottom: 12, flexWrap: "wrap", gap: 8 },
-    filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: "#E2E8F0" },
+    filterRow: { marginBottom: 16 },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, backgroundColor: "#E2E8F0", marginRight: 0 },
     filterChipActive: { backgroundColor: "#5B9EE1" },
     filterChipText: { fontSize: 12, color: "#475569", fontWeight: "500" },
     filterChipTextActive: { color: "#FFFFFF" },
@@ -264,4 +543,179 @@ const styles = StyleSheet.create({
     emptySubtitle: { fontSize: 13, color: "#64748B", marginTop: 4, textAlign: "center", paddingHorizontal: 24 },
     shopButton: { marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: "#5B9EE1", borderRadius: 12 },
     shopButtonText: { fontSize: 14, fontWeight: "600", color: "#FFFFFF" },
+    actionRow: {
+        flexDirection: "row",
+        justifyContent: "flex-end",
+        borderTopWidth: 1,
+        borderTopColor: "#F1F5F9",
+        marginTop: 12,
+        paddingTop: 12,
+        gap: 10,
+    },
+    cancelButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        backgroundColor: "#FEE2E2",
+    },
+    cancelButtonText: {
+        color: "#DC2626",
+        fontSize: 13,
+        fontWeight: "600",
+    },
+    reviewButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        backgroundColor: "#5B9EE1",
+    },
+    reviewButtonText: {
+        color: "#FFFFFF",
+        fontSize: 13,
+        fontWeight: "600",
+    },
+    reviewedBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#FFFBEB",
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        marginTop: 12,
+        alignSelf: "flex-start",
+    },
+    reviewedText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#D97706",
+        marginLeft: 4,
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: "flex-end",
+    },
+    modalContent: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        minHeight: 350,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: "700",
+        color: "#0F172A",
+        textAlign: "center",
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        color: "#64748B",
+        textAlign: "center",
+        marginTop: 4,
+        marginBottom: 20,
+    },
+    starsRow: {
+        flexDirection: "row",
+        justifyContent: "center",
+        marginBottom: 24,
+    },
+    commentInput: {
+        backgroundColor: "#F8FAFC",
+        borderRadius: 12,
+        padding: 16,
+        height: 120,
+        fontSize: 14,
+        color: "#0F172A",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        marginBottom: 24,
+    },
+    modalButtons: {
+        flexDirection: "row",
+        gap: 12,
+    },
+    modalButton: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    cancelModalButton: {
+        backgroundColor: "#F1F5F9",
+    },
+    cancelModalButtonText: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#64748B",
+    },
+    submitModalButton: {
+        backgroundColor: "#5B9EE1",
+    },
+    submitModalButtonText: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#FFFFFF",
+    },
+    // View Review Styles
+    reviewedBadgeRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        borderTopWidth: 1,
+        borderTopColor: "#F1F5F9",
+        marginTop: 12,
+        paddingTop: 12,
+    },
+    viewReviewButton: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    viewReviewButtonText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#5B9EE1",
+    },
+    viewReviewModalContent: {
+        borderRadius: 24,
+        minHeight: "auto",
+        paddingBottom: 24,
+        marginHorizontal: 20,
+    },
+    closeModalButton: {
+        position: "absolute",
+        top: 16,
+        right: 16,
+        zIndex: 10,
+    },
+    ratingText: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#64748B",
+        textAlign: "center",
+        marginTop: -12,
+        marginBottom: 20,
+    },
+    commentDisplay: {
+        flexDirection: "row",
+        backgroundColor: "#F8FAFC",
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+    },
+    commentDisplayText: {
+        flex: 1,
+        fontSize: 14,
+        color: "#0F172A",
+        lineHeight: 20,
+    },
+    reviewDate: {
+        fontSize: 12,
+        color: "#94A3B8",
+        textAlign: "center",
+        marginTop: 16,
+    },
 });

@@ -6,6 +6,7 @@ import {
   Dimensions,
   Image,
   ImageSourcePropType,
+  Platform,
   StyleProp,
   StyleSheet,
   Text,
@@ -14,6 +15,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { useFavorite } from "../../context/FavoriteContext";
+import { useTheme } from "../../context/ThemeContext";
 
 // Tính toán width card để 2 card vừa khít màn hình
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -45,6 +47,7 @@ export default function ProductCard({
   showFavoriteButton = true,
 }: Props) {
   const { isFavorite, toggleFavorite } = useFavorite();
+  const { colors, isDarkMode } = useTheme();
   const isLiked = isFavorite(id);
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
@@ -81,18 +84,18 @@ export default function ProductCard({
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={onPress}
-      style={[styles.container, style]}
+      style={[styles.container, { backgroundColor: colors.card }, style]}
     >
       {/* Image container */}
-      <View style={styles.imageContainer}>
+      <View style={[styles.imageContainer, { backgroundColor: colors.inputBackground }]}>
         {imageLoading && hasValidImage && (
-          <View style={styles.imagePlaceholder}>
-            <ActivityIndicator size="small" color="#5B9EE1" />
+          <View style={[styles.imagePlaceholder, { backgroundColor: colors.inputBackground }]}>
+            <ActivityIndicator size="small" color={colors.primary} />
           </View>
         )}
         {imageError || !hasValidImage ? (
-          <View style={styles.imagePlaceholder}>
-            <Ionicons name="image-outline" size={32} color="#CBD5E1" />
+          <View style={[styles.imagePlaceholder, { backgroundColor: colors.inputBackground }]}>
+            <Ionicons name="image-outline" size={32} color={colors.textMuted} />
           </View>
         ) : (
           <Image
@@ -113,6 +116,7 @@ export default function ProductCard({
           <TouchableOpacity
             style={[
               styles.favoriteButton,
+              { backgroundColor: isDarkMode ? colors.surface : "#FFFFFF" },
               isLiked && styles.favoriteButtonActive,
             ]}
             onPress={handleFavoritePress}
@@ -121,7 +125,7 @@ export default function ProductCard({
             <Ionicons
               name={isLiked ? "heart" : "heart-outline"}
               size={14}
-              color={isLiked ? "#EF4444" : "#94A3B8"}
+              color={isLiked ? "#EF4444" : colors.textMuted}
             />
           </TouchableOpacity>
         )}
@@ -134,19 +138,19 @@ export default function ProductCard({
 
       {/* Product info */}
       <View style={styles.infoContainer}>
-        <Text style={styles.name} numberOfLines={1}>
+        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
           {name}
         </Text>
 
         <View style={styles.priceRow}>
-          <Text style={styles.price}>{price}</Text>
+          <Text style={[styles.price, { color: colors.primary }]}>{price}</Text>
 
           <TouchableOpacity
-            style={styles.addButton}
+            style={[styles.addButton, { backgroundColor: colors.primaryLight }]}
             activeOpacity={0.85}
             onPress={onAddPress}
           >
-            <Text style={styles.addButtonText}>+</Text>
+            <Text style={[styles.addButtonText, { color: colors.primary }]}>+</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -158,18 +162,22 @@ const styles = StyleSheet.create({
   container: {
     width: CARD_WIDTH,
     borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#5B9EE1",
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
     overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   imageContainer: {
     width: "100%",
     height: 110,
-    backgroundColor: "#F8FAFC",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
@@ -185,7 +193,6 @@ const styles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8FAFC",
   },
   favoriteButton: {
     position: "absolute",
@@ -194,14 +201,19 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   favoriteButtonActive: {
     backgroundColor: "#FEE2E2",
@@ -226,7 +238,6 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#0F172A",
     marginBottom: 6,
   },
   priceRow: {
@@ -237,18 +248,15 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#5B9EE1",
   },
   addButton: {
     width: 26,
     height: 26,
     borderRadius: 8,
-    backgroundColor: "#EBF4FF",
     alignItems: "center",
     justifyContent: "center",
   },
   addButtonText: {
-    color: "#5B9EE1",
     fontSize: 16,
     fontWeight: "700",
     lineHeight: 18,

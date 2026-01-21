@@ -152,10 +152,17 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
             label: "My Profile",
             route: "/(main)/profile",
         },
+
         {
             icon: "receipt-outline",
             label: "My Orders",
             route: "/account/my-orders",
+        },
+
+        {
+            icon: "ticket-outline",
+            label: "Voucher",
+            route: "/account/voucher",
         },
         {
             icon: "location-outline",

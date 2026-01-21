@@ -32,23 +32,23 @@ interface UserProfile {
     createdAt?: any;
 }
 
-const GENDER_OPTIONS = ["Nam", "Nữ", "Khác"];
+const GENDER_OPTIONS = ["Male", "Female", "Other"];
 
 // Generate arrays for date picker
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 const MONTHS = [
-    { value: 0, label: "Tháng 1" },
-    { value: 1, label: "Tháng 2" },
-    { value: 2, label: "Tháng 3" },
-    { value: 3, label: "Tháng 4" },
-    { value: 4, label: "Tháng 5" },
-    { value: 5, label: "Tháng 6" },
-    { value: 6, label: "Tháng 7" },
-    { value: 7, label: "Tháng 8" },
-    { value: 8, label: "Tháng 9" },
-    { value: 9, label: "Tháng 10" },
-    { value: 10, label: "Tháng 11" },
-    { value: 11, label: "Tháng 12" },
+    { value: 0, label: "January" },
+    { value: 1, label: "February" },
+    { value: 2, label: "March" },
+    { value: 3, label: "April" },
+    { value: 4, label: "May" },
+    { value: 5, label: "June" },
+    { value: 6, label: "July" },
+    { value: 7, label: "August" },
+    { value: 8, label: "September" },
+    { value: 9, label: "October" },
+    { value: 10, label: "November" },
+    { value: 11, label: "December" },
 ];
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 100 }, (_, i) => currentYear - i);
@@ -89,7 +89,7 @@ export default function EditProfileScreen() {
         try {
             const user = auth.currentUser;
             if (!user) {
-                Alert.alert("Lỗi", "Vui lòng đăng nhập để xem hồ sơ");
+                Alert.alert("Error", "Please login to view profile");
                 router.back();
                 return;
             }
@@ -122,7 +122,7 @@ export default function EditProfileScreen() {
             }
         } catch (error) {
             console.error("Error loading profile:", error);
-            Alert.alert("Lỗi", "Không thể tải thông tin hồ sơ");
+            Alert.alert("Error", "Unable to load profile information");
         } finally {
             setIsLoading(false);
         }
@@ -245,8 +245,8 @@ export default function EditProfileScreen() {
                 // Base64 ~1.37x kích thước gốc, nên giới hạn ~700KB
                 if (base64.length > 700000) {
                     Alert.alert(
-                        "Ảnh quá lớn",
-                        "Vui lòng chọn ảnh có kích thước nhỏ hơn.",
+                        "Image too large",
+                        "Please choose a smaller image.",
                         [{ text: "OK" }]
                     );
                     return null;
@@ -259,8 +259,8 @@ export default function EditProfileScreen() {
         } catch (error: any) {
             console.error("Error processing avatar:", error);
             Alert.alert(
-                "Lỗi",
-                "Không thể xử lý ảnh. Vui lòng thử lại với ảnh khác."
+                "Error",
+                "Unable to process image. Please try again with another image."
             );
             return null;
         }
@@ -343,7 +343,7 @@ export default function EditProfileScreen() {
     // Format date for display
     const formatDate = (date: Date | null): string => {
         if (!date) return "";
-        return date.toLocaleDateString("vi-VN", {
+        return date.toLocaleDateString("en-US", {
             day: "2-digit",
             month: "2-digit",
             year: "numeric",
@@ -357,7 +357,7 @@ export default function EditProfileScreen() {
 
         // Vẫn cho lưu dù thiếu thông tin, chỉ cần có email hợp lệ từ Auth
         if (!email.trim() || !email.includes("@")) {
-            Alert.alert("Lỗi", "Email không hợp lệ");
+            Alert.alert("Error", "Invalid email");
             return;
         }
 
@@ -366,7 +366,7 @@ export default function EditProfileScreen() {
             const user = auth.currentUser;
 
             if (!user) {
-                Alert.alert("Lỗi", "Vui lòng đăng nhập lại");
+                Alert.alert("Error", "Please login again");
                 return;
             }
 
@@ -411,18 +411,18 @@ export default function EditProfileScreen() {
             // Thông báo kết quả
             if (avatarUploadFailed) {
                 Alert.alert(
-                    "Đã lưu một phần",
-                    "Thông tin hồ sơ đã được lưu, nhưng ảnh đại diện không thể upload trên web. Hãy thử trên ứng dụng di động để upload ảnh.",
+                    "Partially Saved",
+                    "Profile information saved, but avatar could not be uploaded on web. Try using the mobile app to upload avatar.",
                     [{ text: "OK", onPress: () => router.back() }]
                 );
             } else {
-                Alert.alert("Thành công", "Hồ sơ đã được cập nhật!", [
+                Alert.alert("Success", "Profile updated!", [
                     { text: "OK", onPress: () => router.back() },
                 ]);
             }
         } catch (error) {
             console.error("Error saving profile:", error);
-            Alert.alert("Lỗi", "Không thể lưu thông tin. Vui lòng thử lại.");
+            Alert.alert("Error", "Unable to save information. Please try again.");
         } finally {
             setIsSaving(false);
         }
@@ -433,7 +433,7 @@ export default function EditProfileScreen() {
         return (
             <View style={[styles.container, styles.loadingContainer]}>
                 <ActivityIndicator size="large" color="#5B9EE1" />
-                <Text style={styles.loadingText}>Đang tải thông tin...</Text>
+                <Text style={styles.loadingText}>Loading information...</Text>
             </View>
         );
     }
@@ -583,7 +583,7 @@ export default function EditProfileScreen() {
                             />
                         </View>
                         {showValidation && !name.trim() && (
-                            <Text style={styles.errorText}>Vui lòng nhập họ tên</Text>
+                            <Text style={styles.errorText}>Please enter your full name</Text>
                         )}
                     </View>
 
@@ -617,7 +617,7 @@ export default function EditProfileScreen() {
                             />
                         </View>
                         {showValidation && !phone.trim() && (
-                            <Text style={styles.errorText}>Vui lòng nhập số điện thoại</Text>
+                            <Text style={styles.errorText}>Please enter your phone number</Text>
                         )}
                     </View>
 
@@ -636,7 +636,7 @@ export default function EditProfileScreen() {
                             <Ionicons name="chevron-down" size={20} color={showValidation && !dateOfBirth ? "#EF4444" : "#94A3B8"} />
                         </TouchableOpacity>
                         {showValidation && !dateOfBirth && (
-                            <Text style={styles.errorText}>Vui lòng chọn ngày sinh</Text>
+                            <Text style={styles.errorText}>Please select date of birth</Text>
                         )}
                     </View>
 
@@ -655,7 +655,7 @@ export default function EditProfileScreen() {
                             <Ionicons name="chevron-down" size={20} color={showValidation && !gender ? "#EF4444" : "#94A3B8"} />
                         </TouchableOpacity>
                         {showValidation && !gender && (
-                            <Text style={styles.errorText}>Vui lòng chọn giới tính</Text>
+                            <Text style={styles.errorText}>Please select gender</Text>
                         )}
                     </View>
                 </View>
@@ -669,7 +669,7 @@ export default function EditProfileScreen() {
                     {isSaving ? (
                         <>
                             <ActivityIndicator size="small" color="#FFF" />
-                            <Text style={styles.saveText}>Đang lưu...</Text>
+                            <Text style={styles.saveText}>Saving...</Text>
                         </>
                     ) : (
                         <>
@@ -698,15 +698,15 @@ export default function EditProfileScreen() {
                     >
                         <View style={styles.modalHeader}>
                             <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                                <Text style={styles.modalCancelText}>Hủy</Text>
+                                <Text style={styles.modalCancelText}>Cancel</Text>
                             </TouchableOpacity>
                             <Text style={styles.modalTitle}>
-                                {dateStep === 'day' ? 'Chọn ngày' :
-                                    dateStep === 'month' ? 'Chọn tháng' : 'Chọn năm'}
+                                {dateStep === 'day' ? 'Select Day' :
+                                    dateStep === 'month' ? 'Select Month' : 'Select Year'}
                             </Text>
                             {dateStep === 'year' ? (
                                 <TouchableOpacity onPress={confirmDateSelection}>
-                                    <Text style={styles.modalConfirmText}>Xong</Text>
+                                    <Text style={styles.modalConfirmText}>Done</Text>
                                 </TouchableOpacity>
                             ) : (
                                 <View style={{ width: 50 }} />
@@ -763,7 +763,7 @@ export default function EditProfileScreen() {
                         <View style={styles.genderModalHeader}>
                             <View style={styles.modalHandle} />
                         </View>
-                        <Text style={styles.genderModalTitle}>Chọn giới tính</Text>
+                        <Text style={styles.genderModalTitle}>Select Gender</Text>
                         {GENDER_OPTIONS.map((option) => (
                             <TouchableOpacity
                                 key={option}
@@ -793,7 +793,7 @@ export default function EditProfileScreen() {
                             style={styles.cancelButton}
                             onPress={() => setShowGenderPicker(false)}
                         >
-                            <Text style={styles.cancelButtonText}>Hủy</Text>
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
                     </View>
                 </TouchableOpacity>

@@ -36,18 +36,18 @@ export default function ForgotPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (cooldown > 0) {
-      Alert.alert('Thông báo', `Vui lòng chờ ${cooldown}s để thử lại`);
+      Alert.alert('Notice', `Please wait ${cooldown}s to try again`);
       return;
     }
 
     if (!email.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập địa chỉ email');
+      Alert.alert('Error', 'Please enter your email address');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('Lỗi', 'Vui lòng nhập địa chỉ email hợp lệ');
+      Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
 
@@ -56,11 +56,11 @@ export default function ForgotPasswordScreen() {
     try {
       await sendPasswordResetEmail(auth, email.trim());
 
-      setCooldown(60); // ⏳ 60 giây chống spam
+      setCooldown(60); // ⏳ 60 seconds spam protection
 
       Alert.alert(
-        'Thành công',
-        `Email khôi phục mật khẩu đã được gửi đến ${email.trim()}.`,
+        'Success',
+        `Password reset link has been sent to ${email.trim()}.`,
         [
           {
             text: 'OK',
@@ -72,25 +72,25 @@ export default function ForgotPasswordScreen() {
     } catch (error: any) {
       console.log('RESET PASSWORD ERROR:', error.code);
 
-      let message = 'Không thể gửi email khôi phục mật khẩu';
+      let message = 'Could not send password reset email';
 
       switch (error.code) {
         case 'auth/user-not-found':
-          message = 'Email này chưa được đăng ký';
+          message = 'This email is not registered';
           break;
         case 'auth/invalid-email':
-          message = 'Địa chỉ email không hợp lệ';
+          message = 'Invalid email address';
           break;
         case 'auth/too-many-requests':
-          message = 'Bạn gửi quá nhiều lần. Vui lòng thử lại sau vài phút';
+          message = 'Too many requests. Please try again later';
           setCooldown(60);
           break;
         case 'auth/network-request-failed':
-          message = 'Lỗi kết nối mạng. Vui lòng kiểm tra internet';
+          message = 'Network error. Please check your internet connection';
           break;
       }
 
-      Alert.alert('Lỗi', message);
+      Alert.alert('Error', message);
     } finally {
       setIsLoading(false);
     }
@@ -120,10 +120,10 @@ export default function ForgotPasswordScreen() {
         {/* Header */}
         <View style={{ marginBottom: height * 0.05 }}>
           <Text style={{ fontSize: width * 0.072, fontWeight: 'bold', color: '#1A2530' }}>
-            Quên mật khẩu?
+            Forgot Password?
           </Text>
           <Text style={{ fontSize: width * 0.04, color: '#778899', marginTop: 12 }}>
-            Nhập email đã đăng ký để nhận link khôi phục mật khẩu
+            Enter your registered email to receive password reset link
           </Text>
         </View>
 
@@ -131,7 +131,7 @@ export default function ForgotPasswordScreen() {
         <View style={styles.form}>
           <View style={styles.inputContainer}>
             <Text style={{ fontSize: width * 0.038, fontWeight: '600', marginBottom: 10 }}>
-              Địa chỉ Email
+              Email Address
             </Text>
             <TextInput
               style={styles.input}
@@ -155,10 +155,10 @@ export default function ForgotPasswordScreen() {
           >
             <Text style={{ color: '#fff', fontSize: width * 0.045 }}>
               {isLoading
-                ? 'Đang gửi...'
+                ? 'Sending...'
                 : cooldown > 0
-                  ? `Chờ ${cooldown}s`
-                  : 'Gửi email khôi phục'}
+                  ? `Wait ${cooldown}s`
+                  : 'Send Reset Email'}
             </Text>
           </TouchableOpacity>
 
@@ -166,7 +166,7 @@ export default function ForgotPasswordScreen() {
             onPress={() => router.back()}
             style={{ marginTop: 24, alignItems: 'center' }}
           >
-            <Text style={{ color: '#5B9EE1' }}>← Quay lại đăng nhập</Text>
+            <Text style={{ color: '#5B9EE1' }}>← Back to Login</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
